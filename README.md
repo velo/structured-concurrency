@@ -123,7 +123,7 @@ Three independent checks keep the copy honest, and all of them can follow the JD
 | Check | What it proves | Runs on |
 |---|---|---|
 | **Upstream conformance tests**: OpenJDK's own `StructuredTaskScopeTest` and `StressCancellation`, downloaded at build time from the pinned tag, with their imports pointed at this package | Behavior matches the JDK's own test suite, 627 tests | JDK 25 |
-| **API alignment test** ([`ApiAlignmentTest`](jdk28/api-alignment/src/test/java/com/marvinformatics/structured/alignment/ApiAlignmentTest.java)): compares every public type with its JDK counterpart by reflection | Modifiers, sealed-ness, type parameters and bounds, supertypes, every constructor and method signature with generics and thrown exceptions, enum constants, nested types, `serialVersionUID` | JDK 28 |
+| **API alignment test** ([`ApiAlignmentTest`](jdk28/api-alignment/src/test/java/com/marvinformatics/structured/alignment/ApiAlignmentTest.java)): compares every public type with its JDK counterpart by reflection. The JDK types to compare are discovered, not listed: every public `Structure*` type in `java.util.concurrent` and all of their public nested types | Access flags, sealed-ness, type parameters and bounds, supertypes, every constructor and method signature with generics and thrown exceptions, enum constants, nested types, `serialVersionUID` | JDK 28 |
 | **Migration flows**: this project's own tests, migrated by each tool and run with the backport *removed from the classpath* | Code written against the backport behaves the same against the JDK after migration | JDK 28 |
 
 The upstream tests are GPLv2 and are **not** part of this repository. The build downloads them into
@@ -174,7 +174,7 @@ java -jar org.eclipse.transformer.cli-1.0.0.jar \
 
 The rule is one line: it renames exactly one package, `com.marvinformatics.structured`, to
 `java.util.concurrent`. With the Maven plugin (`transformer-maven-plugin`), pass the file in
-`<rules><renames>`, as [`jdk28/transform-flow`](jdk28/transform-flow/pom.xml) does.
+`<rules><renames>`, as [`jdk28/bytecode-transform-tests`](jdk28/bytecode-transform-tests/pom.xml) does.
 Keep your own classes out of that package: the JVM refuses to load application classes in
 `java.*`.
 
@@ -213,8 +213,8 @@ preview, set `jdk28.preview-flag` to empty.
 | `structured-concurrency-rewrite` | OpenRewrite recipes for source migration |
 | `structured-concurrency-transformer-rules` | Eclipse Transformer rules for bytecode migration |
 | `jdk28/api-alignment` | Reflection comparison against `java.util.concurrent` |
-| `jdk28/transform-flow` | Runs the bytecode-transformed tests on the JDK |
-| `jdk28/rewrite-flow` | Runs the OpenRewrite-migrated tests on the JDK |
+| `jdk28/bytecode-transform-tests` | Runs the bytecode-transformed tests on the JDK |
+| `jdk28/source-rewrite-tests` | Runs the OpenRewrite-migrated tests on the JDK |
 
 The `jdk28` modules are only built with `-Pjdk28`.
 

@@ -32,18 +32,21 @@ rules exist.
 
 - Use the Maven wrapper. Use Docker for JDK 28; don't assume it is installed.
 - Use absolute paths or `-f`/`-pl`; don't change the working directory.
-- `jdk28/rewrite-flow` writes generated sources into its own `src/test/java`. That directory is
-  gitignored and wiped by `mvn clean`. OpenRewrite skips git-ignored files, so the script hides
-  `.git` from the rewrite stage. Running that stage directly fails fast on leftover backport imports.
+- `jdk28/source-rewrite-tests` writes generated sources into its own `src/test/java`. That directory
+  is gitignored and wiped by `mvn clean`. OpenRewrite skips git-ignored files, so the script hides
+  `.git` from its containers. On JDK 28 the backport is not on that module's classpath, so any
+  backport reference the rewrite missed fails compilation.
 - OpenRewrite cannot run on JDK 28 yet, so the rewrite stage runs on JDK 25 (see the script).
 
 ## Updating to a newer OpenJDK build
 
-1. Bump `openjdk.ref` and `jdk28.image` in `pom.xml`, and `JDK28_IMAGE` in
-   `scripts/verify-jdk28.sh`. Renovate normally does this.
+1. Bump `openjdk.ref` and `jdk28.image` in `pom.xml`; the script reads the image from there.
+   Renovate normally does this.
 2. Run `./mvnw verify` and `scripts/verify-jdk28.sh`.
 3. If the alignment test fails, change the public API to match and implement the new behavior from
-   the javadoc. If a conformance test fails, fix the implementation. Only exclude an upstream test
+   the javadoc. The alignment test finds the types to compare by itself: every public type in
+   `java.util.concurrent` whose name starts with `Structure`, and all their public nested types. If
+   a new type appears there, it fails until the backport has it. If a conformance test fails, fix the implementation. Only exclude an upstream test
    when it depends on JDK internals the library cannot reach, and list it under "Known
    differences" in the README.
 
