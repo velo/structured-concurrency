@@ -154,20 +154,21 @@ mvn org.openrewrite.maven:rewrite-maven-plugin:run \
   -Drewrite.activeRecipes=com.marvinformatics.structured.MigrateToJdkStructuredConcurrency
 ```
 
-`MigrateToJdkStructuredConcurrency` changes the types to `java.util.concurrent`, including nested
-type imports and qualified references such as `StructuredTaskScope.Joiner`, and removes the
-backport dependency. Use
+`MigrateToJdkStructuredConcurrency` does both parts of the move. It renames the
+`com.marvinformatics.structured` package to `java.util.concurrent` in Java sources, including
+nested, wildcard and static imports, and it removes the backport dependency from `pom.xml`. Use
 `UseJdkStructuredConcurrencyTypes` to change only the Java sources.
 
 ### Bytecode: Eclipse Transformer
 
 To run already compiled code on the JDK, for example a dependency you cannot rebuild, use the
-renames rule shipped in `structured-concurrency-transformer`. Extract
-`com/marvinformatics/structured/transformer/structured-renames.properties` from that jar, then:
+renames rule shipped in `structured-concurrency-transformer-rules`. Extract
+`com/marvinformatics/structured/transformer/backport-to-jdk-package-renames.properties` from that
+jar, then:
 
 ```shell
 java -jar org.eclipse.transformer.cli-1.0.0.jar \
-  -tr structured-renames.properties \
+  -tr backport-to-jdk-package-renames.properties \
   app.jar app-jdk28.jar
 ```
 
@@ -210,7 +211,7 @@ preview, set `jdk28.preview-flag` to empty.
 | `structured-concurrency` | The backport, its tests and the use-case examples |
 | `upstream-conformance` | Runs OpenJDK's own tests against the backport; publishes nothing |
 | `structured-concurrency-rewrite` | OpenRewrite recipes for source migration |
-| `structured-concurrency-transformer` | Eclipse Transformer rules for bytecode migration |
+| `structured-concurrency-transformer-rules` | Eclipse Transformer rules for bytecode migration |
 | `jdk28/api-alignment` | Reflection comparison against `java.util.concurrent` |
 | `jdk28/transform-flow` | Runs the bytecode-transformed tests on the JDK |
 | `jdk28/rewrite-flow` | Runs the OpenRewrite-migrated tests on the JDK |

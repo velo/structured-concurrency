@@ -12,6 +12,7 @@
 
   <artifactId>structured-concurrency-rewrite</artifactId>
   <name>Structured Concurrency OpenRewrite Recipes</name>
+  <description>OpenRewrite recipes that migrate source code from the backport to java.util.concurrent</description>
 
   <dependencies>
     <dependency>

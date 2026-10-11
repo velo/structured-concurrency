@@ -37,7 +37,7 @@
   <modules>
     <module>structured-concurrency</module>
     <module>structured-concurrency-rewrite</module>
-    <module>structured-concurrency-transformer</module>
+    <module>structured-concurrency-transformer-rules</module>
   </modules>
 
   <profiles>
@@ -102,16 +102,6 @@
         <artifactId>structured-concurrency</artifactId>
         <version>${project.version}</version>
         <type>test-jar</type>
-      </dependency>
-      <dependency>
-        <groupId>com.marvinformatics.structured</groupId>
-        <artifactId>structured-concurrency-rewrite</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.marvinformatics.structured</groupId>
-        <artifactId>structured-concurrency-transformer</artifactId>
-        <version>${project.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
