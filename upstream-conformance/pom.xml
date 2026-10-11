@@ -16,6 +16,7 @@
   <properties>
     <upstream.tests.url>https://raw.githubusercontent.com/openjdk/jdk/${openjdk.ref}/test/jdk/java/util/concurrent/StructuredTaskScope</upstream.tests.url>
     <upstream.tests.dir>${project.build.directory}/upstream-tests/${openjdk.ref}</upstream.tests.dir>
+    <maven.compiler.release>25</maven.compiler.release>
     <maven.install.skip>true</maven.install.skip>
     <maven.deploy.skip>true</maven.deploy.skip>
   </properties>

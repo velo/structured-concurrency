@@ -101,7 +101,7 @@ import java.util.function.UnaryOperator;
  *
  * <h2>Differences from the JDK</h2>
  *
- * <p>Subtask threads do not inherit {@link ScopedValue} bindings, a change of bindings since the
+ * <p>Subtask threads do not inherit {@code ScopedValue} bindings, a change of bindings since the
  * scope was opened is not detected, and scopes do not appear in thread dumps.
  *
  * @param <T> the result type of subtasks forked in the scope

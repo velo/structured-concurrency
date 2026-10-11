@@ -84,7 +84,7 @@ class JoinerTest {
 
   @Test
   void allUntilReturnsBothSucceededAndFailedSubtasks() throws Exception {
-    try (var scope = StructuredTaskScope.open(Joiner.<String>allUntil(_ -> false))) {
+    try (var scope = StructuredTaskScope.open(Joiner.<String>allUntil(subtask -> false))) {
       scope.fork(() -> "ok");
       scope.fork(() -> {
         throw new IllegalStateException();
@@ -100,7 +100,7 @@ class JoinerTest {
   @Test
   void allUntilReturnsSubtasksWhenTimeoutExpires() throws Exception {
     try (var scope = StructuredTaskScope.open(
-        Joiner.<String>allUntil(_ -> false), cf -> cf.withTimeout(Duration.ofMillis(100)))) {
+        Joiner.<String>allUntil(subtask -> false), cf -> cf.withTimeout(Duration.ofMillis(100)))) {
       Subtask<String> slow = scope.fork(() -> {
         Thread.sleep(Duration.ofDays(1));
         return "slow";

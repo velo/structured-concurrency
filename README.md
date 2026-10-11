@@ -1,7 +1,7 @@
 # Structured Concurrency Backport
 
 The JDK 28 `StructuredTaskScope` API, as finalized by [JEP 543](https://openjdk.org/jeps/543),
-packaged as a plain library for **JDK 25 without `--enable-preview`**. It comes with tooling that
+packaged as a plain library for **JDK 21 or later, without `--enable-preview`**. It comes with tooling that
 moves your code to the real JDK API when you upgrade, the way the Eclipse Transformer moved
 `javax` code to `jakarta`.
 
@@ -25,7 +25,7 @@ tools here automate it.
 ## Why
 
 Structured concurrency spent seven rounds in preview (JDK 21 to 27) and becomes final in JDK 28.
-Many teams stay on the JDK 25 LTS and won't ship with preview features enabled. This library lets
+Many teams stay on the JDK 21 and 25 LTS releases and won't ship with preview features enabled. This library lets
 them write structured concurrency code today, against the **final** API rather than a preview that
 is about to change. When they move to JDK 28, a recipe or bytecode transform retargets the code.
 
@@ -46,7 +46,7 @@ candidates were:
   to the JDK by a package rename.
 
 None of them mirrors JEP 543, so this project was started with three goals: the final API on
-JDK 25, tools that move code to the JDK, and tests that prove both.
+JDK 21 and later, tools that move code to the JDK, and tests that prove both.
 
 ## Keeping the license clean
 
@@ -99,7 +99,7 @@ specification of `java.util.concurrent.StructuredTaskScope`: its javadoc at the 
 
 - the type shapes: `StructuredTaskScope<T, R, R_X>`, `Subtask` and its `State`, `Joiner`,
   `Configuration`, `CancelledByTimeoutException`, and `StructureViolationException`. The last one
-  is still a preview API on JDK 25, so the library ships its own copy in the same package;
+  is a preview API before JDK 28, so the library ships its own copy in the same package;
 - every method signature, including generic bounds and thrown exceptions;
 - the documented behavior: owner confinement, fork after join, join after interrupt, close
   without join, timeouts, structure violations, the `onComplete` visibility rules for
@@ -185,9 +185,13 @@ While structured concurrency is still preview in JDK 28 early-access builds, run
 
 | Command | What it does |
 |---|---|
-| `./mvnw verify` | JDK 25 build: library, recipes, transformer rules, our tests, and the upstream conformance tests (needs network) |
+| `./mvnw verify` | Library, recipes, transformer rules and our tests. On JDK 25 or later it also runs the upstream conformance tests (needs network) |
 | `./mvnw verify -Dupstream.skip` | Same, without downloading the upstream tests |
 | `scripts/verify-jdk28.sh` | Everything above, then API alignment and both migration flows on JDK 28, all in Docker |
+
+The library is compiled for Java 21, the first LTS with final virtual threads, which the design
+relies on. The build itself needs JDK 21 or later; the upstream conformance tests use Java 22
+syntax, so they only run on JDK 25 or later. CI builds on both 21 and 25.
 
 The rewrite flow runs in two stages because OpenRewrite cannot run on JDK 28 yet: it rewrites on
 JDK 25, then compiles and tests on JDK 28. That also matches how a real migration happens.

@@ -142,7 +142,7 @@ class UseCaseExamplesTest {
       recommendation = scope.join();
     } catch (ExecutionException e) {
       recommendation = switch (e.getCause()) {
-        case CancelledByTimeoutException _ -> "bestsellers";
+        case CancelledByTimeoutException timeout -> "bestsellers";
         default -> throw e;
       };
     }
@@ -159,7 +159,7 @@ class UseCaseExamplesTest {
 
     List<String> results;
     try (var scope = StructuredTaskScope.open(
-        Joiner.<String>allUntil(_ -> false), cf -> cf.withTimeout(Duration.ofMillis(500)))) {
+        Joiner.<String>allUntil(subtask -> false), cf -> cf.withTimeout(Duration.ofMillis(500)))) {
       backends.forEach((name, latency) -> scope.fork(() -> sleepThenReturn(name, latency)));
 
       results = scope.join().stream()
@@ -423,7 +423,7 @@ class UseCaseExamplesTest {
 
   @Test
   void optionalEnrichmentDoesNotFailTheRequest() throws Exception {
-    try (var scope = StructuredTaskScope.open(Joiner.<Object>allUntil(_ -> false))) {
+    try (var scope = StructuredTaskScope.open(Joiner.<Object>allUntil(subtask -> false))) {
       Subtask<User> user = scope.fork(() -> fetchStubUserAfterDelay("1"));
       Subtask<String> avatar = scope.fork(() -> {
         throw new IllegalStateException("avatar service down");
