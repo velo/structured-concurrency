@@ -25,11 +25,13 @@ rules exist.
 
 | Task | Command |
 |---|---|
-| Normal build (JDK 25) | `./mvnw verify` |
+| Normal build (JDK 21 or later) | `./mvnw verify` |
 | Without network for upstream tests | `./mvnw verify -Dupstream.skip` |
 | Full JDK 28 verification (Docker) | `scripts/verify-jdk28.sh` |
 | Only the API alignment test | `scripts/verify-jdk28.sh --skip-install`, or run `./mvnw -Pjdk28 -pl jdk28/api-alignment verify` inside the JDK 28 image |
 
+- Every module outside `jdk28/` compiles at release 21. Upstream tests that use newer syntax are
+  adapted with `replaceregexp` in `upstream-conformance/pom.xml`, never committed.
 - Use the Maven wrapper. Use Docker for JDK 28; don't assume it is installed.
 - Use absolute paths or `-f`/`-pl`; don't change the working directory.
 - `jdk28/source-rewrite-tests` writes generated sources into its own `src/test/java`. That directory

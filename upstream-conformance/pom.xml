@@ -57,6 +57,11 @@
                   <substitution expression="com.marvinformatics.structured.\1"/>
                   <fileset dir="${upstream.tests.dir}" includes="*.java"/>
                 </replaceregexp>
+                <replaceregexp flags="g">
+                  <regexp pattern="\b_ -&gt;"/>
+                  <substitution expression="ignored -&gt;"/>
+                  <fileset dir="${upstream.tests.dir}" includes="*.java"/>
+                </replaceregexp>
               </target>
             </configuration>
           </execution>
