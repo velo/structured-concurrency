@@ -62,7 +62,7 @@ Copying OpenJDK code into it would break that, so the project follows these step
   `serialVersionUID` values match the JDK, because source and binary migration depend on them.
   The javadoc is written in this project's own words.
 - **Upstream tests are run, never shipped.** OpenJDK's tests are downloaded at build time into
-  `target/`. They are never committed and are excluded from the published test-jar.
+  the `upstream-conformance` module, which publishes nothing. They are never committed.
 - **Own tests and examples.** The tests and use-case examples were written for this project. The
   patterns they show are widely known, but the code is not copied from articles, the JEPs or
   OpenJDK.
@@ -127,7 +127,8 @@ Three independent checks keep the copy honest, and all of them can follow the JD
 | **Migration flows**: this project's own tests, migrated by each tool and run with the backport *removed from the classpath* | Code written against the backport behaves the same against the JDK after migration | JDK 28 |
 
 The upstream tests are GPLv2 and are **not** part of this repository. The build downloads them into
-`target/`, and they are excluded from the published test-jar.
+`upstream-conformance/target/`, under a directory named after `openjdk.ref`, and that module is
+never installed or published.
 
 ## Known differences
 
@@ -207,6 +208,7 @@ preview, set `jdk28.preview-flag` to empty.
 | Module | Purpose |
 |---|---|
 | `structured-concurrency` | The backport, its tests and the use-case examples |
+| `upstream-conformance` | Runs OpenJDK's own tests against the backport; publishes nothing |
 | `structured-concurrency-rewrite` | OpenRewrite recipes for source migration |
 | `structured-concurrency-transformer` | Eclipse Transformer rules for bytecode migration |
 | `jdk28/api-alignment` | Reflection comparison against `java.util.concurrent` |

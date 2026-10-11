@@ -11,8 +11,9 @@ rules exist.
 - **Never copy OpenJDK implementation code.** OpenJDK is GPLv2 and this project is Apache 2.0.
   Derive behavior from the public javadoc and JEP 543, and from what the upstream tests assert. Do
   not read or paste `StructuredTaskScopeImpl.java` or `Joiners.java` from `openjdk/jdk`.
-- **Never commit upstream tests.** They are downloaded into `structured-concurrency/target/` at
-  build time and excluded from the test-jar. Keep it that way.
+- **Never commit upstream tests.** They are downloaded at build time into
+  `upstream-conformance/target/`, a module that publishes nothing. Keep them out of every other
+  module.
 - The public API must stay identical to `java.util.concurrent.StructuredTaskScope` at the pinned
   `openjdk.ref`. `jdk28/api-alignment` enforces this; don't add public members it would reject.
 - Tests that are migrated to the JDK (`structured-concurrency/src/test/java/.../spec`) may only use
