@@ -22,7 +22,7 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: maven
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -31,7 +31,7 @@ jobs:
       - run: mkdocs build --strict --site-dir site
       - run: ./mvnw -B -pl structured-concurrency javadoc:javadoc
       - run: cp -r structured-concurrency/target/reports/apidocs site/api
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
@@ -47,4 +47,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
