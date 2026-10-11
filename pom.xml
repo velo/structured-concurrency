@@ -38,6 +38,20 @@
     <module>structured-concurrency</module>
   </modules>
 
+  <profiles>
+    <profile>
+      <id>upstream-tests</id>
+      <activation>
+        <property>
+          <name>!upstream.skip</name>
+        </property>
+      </activation>
+      <modules>
+        <module>upstream-conformance</module>
+      </modules>
+    </profile>
+  </profiles>
+
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.build.outputTimestamp>2026-10-11T00:00:00Z</project.build.outputTimestamp>
