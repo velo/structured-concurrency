@@ -10,7 +10,7 @@
   <packaging>pom</packaging>
 
   <name>Structured Concurrency Backport</name>
-  <description>JDK 28 StructuredTaskScope API for JDK 25, with migration tooling to the JDK implementation</description>
+  <description>JDK 28 StructuredTaskScope API for JDK 21, with migration tooling to the JDK implementation</description>
   <url>https://github.com/velo/structured-concurrency</url>
 
   <licenses>
@@ -44,7 +44,6 @@
     <profile>
       <id>upstream-tests</id>
       <activation>
-        <jdk>[25,)</jdk>
         <property>
           <name>!upstream.skip</name>
         </property>

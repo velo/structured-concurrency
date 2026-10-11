@@ -141,10 +141,10 @@ class UseCaseExamplesTest {
       scope.fork(() -> sleepThenReturn("personalized", Duration.ofDays(1)));
       recommendation = scope.join();
     } catch (ExecutionException e) {
-      recommendation = switch (e.getCause()) {
-        case CancelledByTimeoutException timeout -> "bestsellers";
-        default -> throw e;
-      };
+      if (!(e.getCause() instanceof CancelledByTimeoutException)) {
+        throw e;
+      }
+      recommendation = "bestsellers";
     }
 
     assertThat(recommendation).isEqualTo("bestsellers");

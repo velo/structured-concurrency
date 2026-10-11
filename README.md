@@ -1,9 +1,9 @@
 # Structured Concurrency Backport
 
 The JDK 28 `StructuredTaskScope` API, as finalized by [JEP 543](https://openjdk.org/jeps/543),
-packaged as a plain library for **JDK 21 or later, without `--enable-preview`**. It comes with tooling that
-moves your code to the real JDK API when you upgrade, the way the Eclipse Transformer moved
-`javax` code to `jakarta`.
+packaged as a plain library for **JDK 21 or later, without `--enable-preview`**. It comes with
+tooling that moves your code to the real JDK API when you upgrade, the way the Eclipse Transformer
+moved `javax` code to `jakarta`.
 
 ```java
 import com.marvinformatics.structured.StructuredTaskScope;
@@ -25,9 +25,10 @@ tools here automate it.
 ## Why
 
 Structured concurrency spent seven rounds in preview (JDK 21 to 27) and becomes final in JDK 28.
-Many teams stay on the JDK 21 and 25 LTS releases and won't ship with preview features enabled. This library lets
-them write structured concurrency code today, against the **final** API rather than a preview that
-is about to change. When they move to JDK 28, a recipe or bytecode transform retargets the code.
+Many teams stay on the JDK 21 and 25 LTS releases and won't ship with preview features enabled. This
+library lets them write structured concurrency code today, against the **final** API rather than a
+preview that is about to change. When they move to JDK 28, a recipe or bytecode transform retargets
+the code.
 
 ## How this project started
 
@@ -122,7 +123,7 @@ Three independent checks keep the copy honest, and all of them can follow the JD
 
 | Check | What it proves | Runs on |
 |---|---|---|
-| **Upstream conformance tests**: OpenJDK's own `StructuredTaskScopeTest` and `StressCancellation`, downloaded at build time from the pinned tag, with their imports pointed at this package | Behavior matches the JDK's own test suite, 627 tests | JDK 25 |
+| **Upstream conformance tests**: OpenJDK's own `StructuredTaskScopeTest` and `StressCancellation`, downloaded at build time from the pinned tag, with their imports pointed at this package | Behavior matches the JDK's own test suite, 627 tests | JDK 21 and 25 |
 | **API alignment test** ([`ApiAlignmentTest`](jdk28/api-alignment/src/test/java/com/marvinformatics/structured/alignment/ApiAlignmentTest.java)): compares every public type with its JDK counterpart by reflection. The JDK types to compare are discovered, not listed: every public `Structure*` type in `java.util.concurrent` and all of their public nested types | Access flags, sealed-ness, type parameters and bounds, supertypes, every constructor and method signature with generics and thrown exceptions, enum constants, nested types, `serialVersionUID` | JDK 28 |
 | **Migration flows**: this project's own tests, migrated by each tool and run with the backport *removed from the classpath* | Code written against the backport behaves the same against the JDK after migration | JDK 28 |
 
@@ -185,13 +186,12 @@ While structured concurrency is still preview in JDK 28 early-access builds, run
 
 | Command | What it does |
 |---|---|
-| `./mvnw verify` | Library, recipes, transformer rules and our tests. On JDK 25 or later it also runs the upstream conformance tests (needs network) |
+| `./mvnw verify` | Library, recipes, transformer rules, our tests, and the upstream conformance tests (needs network) |
 | `./mvnw verify -Dupstream.skip` | Same, without downloading the upstream tests |
 | `scripts/verify-jdk28.sh` | Everything above, then API alignment and both migration flows on JDK 28, all in Docker |
 
-The library is compiled for Java 21, the first LTS with final virtual threads, which the design
-relies on. The build itself needs JDK 21 or later; the upstream conformance tests use Java 22
-syntax, so they only run on JDK 25 or later. CI builds on both 21 and 25.
+The library is compiled for Java 21. Java 21 is the first LTS with final virtual threads, and the
+design relies on them. You need JDK 21 or later to build it. CI builds on both 21 and 25.
 
 The rewrite flow runs in two stages because OpenRewrite cannot run on JDK 28 yet: it rewrites on
 JDK 25, then compiles and tests on JDK 28. That also matches how a real migration happens.

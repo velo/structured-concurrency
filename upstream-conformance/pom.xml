@@ -16,7 +16,6 @@
   <properties>
     <upstream.tests.url>https://raw.githubusercontent.com/openjdk/jdk/${openjdk.ref}/test/jdk/java/util/concurrent/StructuredTaskScope</upstream.tests.url>
     <upstream.tests.dir>${project.build.directory}/upstream-tests/${openjdk.ref}</upstream.tests.dir>
-    <maven.compiler.release>25</maven.compiler.release>
     <maven.install.skip>true</maven.install.skip>
     <maven.deploy.skip>true</maven.deploy.skip>
   </properties>
@@ -56,6 +55,11 @@
                 <replaceregexp flags="g">
                   <regexp pattern="java\.util\.concurrent\.(StructuredTaskScope|StructureViolationException)"/>
                   <substitution expression="com.marvinformatics.structured.\1"/>
+                  <fileset dir="${upstream.tests.dir}" includes="*.java"/>
+                </replaceregexp>
+                <replaceregexp flags="g">
+                  <regexp pattern="\b_ -&gt;"/>
+                  <substitution expression="ignored -&gt;"/>
                   <fileset dir="${upstream.tests.dir}" includes="*.java"/>
                 </replaceregexp>
               </target>
