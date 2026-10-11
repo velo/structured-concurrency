@@ -1,0 +1,63 @@
+# AGENTS.md
+
+Guidance for coding agents working on this repository. Read [README.md](README.md) first for what
+the project is and how the API was derived.
+
+## Ground rules
+
+The README sections "How this project started" and "Keeping the license clean" explain why these
+rules exist.
+
+- **Never copy OpenJDK implementation code.** OpenJDK is GPLv2 and this project is Apache 2.0.
+  Derive behavior from the public javadoc and JEP 543, and from what the upstream tests assert. Do
+  not read or paste `StructuredTaskScopeImpl.java` or `Joiners.java` from `openjdk/jdk`.
+- **Never commit upstream tests.** They are downloaded at build time into
+  `upstream-conformance/target/`, a module that publishes nothing. Keep them out of every other
+  module.
+- The public API must stay identical to `java.util.concurrent.StructuredTaskScope` at the pinned
+  `openjdk.ref`. `jdk28/api-alignment` enforces this; don't add public members it would reject.
+- Tests that are migrated to the JDK (`structured-concurrency/src/test/java/.../spec`) may only use
+  the public API. No `StructuredTaskScopeImpl`, no `toString()` formats, no stack frame names.
+- Keep test classes out of the `com.marvinformatics.structured` package itself. The migration tools
+  rename that package to `java.util.concurrent`, where the JVM cannot load application classes.
+
+## Building and testing
+
+| Task | Command |
+|---|---|
+| Normal build (JDK 25) | `./mvnw verify` |
+| Without network for upstream tests | `./mvnw verify -Dupstream.skip` |
+| Full JDK 28 verification (Docker) | `scripts/verify-jdk28.sh` |
+| Only the API alignment test | `scripts/verify-jdk28.sh --skip-install`, or run `./mvnw -Pjdk28 -pl jdk28/api-alignment verify` inside the JDK 28 image |
+
+- Use the Maven wrapper. Use Docker for JDK 28; don't assume it is installed.
+- Use absolute paths or `-f`/`-pl`; don't change the working directory.
+- `jdk28/rewrite-flow` writes generated sources into its own `src/test/java`. That directory is
+  gitignored and wiped by `mvn clean`. OpenRewrite skips git-ignored files, so the script hides
+  `.git` from the rewrite stage. Running that stage directly fails fast on leftover backport imports.
+- OpenRewrite cannot run on JDK 28 yet, so the rewrite stage runs on JDK 25 (see the script).
+
+## Updating to a newer OpenJDK build
+
+1. Bump `openjdk.ref` and `jdk28.image` in `pom.xml`, and `JDK28_IMAGE` in
+   `scripts/verify-jdk28.sh`. Renovate normally does this.
+2. Run `./mvnw verify` and `scripts/verify-jdk28.sh`.
+3. If the alignment test fails, change the public API to match and implement the new behavior from
+   the javadoc. If a conformance test fails, fix the implementation. Only exclude an upstream test
+   when it depends on JDK internals the library cannot reach, and list it under "Known
+   differences" in the README.
+
+## Code style
+
+- Two-space indentation, as in the existing sources. Use imports, never fully qualified class
+  names.
+- Keep comments rare: name things so the code explains itself, and put rationale in the PR
+  description. Never raise the comment-to-code ratio of a file.
+- Assertions must be exact. No `containsAnyOf`, `satisfiesAnyOf` or similar.
+- End every file with a newline, and leave no trailing whitespace.
+
+## Git
+
+- Commit only when explicitly asked. Never commit to `main` directly; check the branch first.
+- Commit messages are a single line, signed off and signed: `git commit -s -S -m "..."`, with no
+  co-author trailers.
