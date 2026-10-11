@@ -5,4 +5,4 @@ target/
 .project
 .settings/
 .factorypath
-jdk28/rewrite-flow/src/
+jdk28/source-rewrite-tests/src/test/java/

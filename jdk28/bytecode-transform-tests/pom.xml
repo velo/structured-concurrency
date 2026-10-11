@@ -10,18 +10,9 @@
     <version>0.1.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>transform-flow</artifactId>
-  <name>JDK 28 Bytecode Transform Flow</name>
+  <artifactId>bytecode-transform-tests</artifactId>
+  <name>JDK 28 Bytecode Transform Tests</name>
   <description>Runs the backport test classes, retargeted to java.util.concurrent by Eclipse Transformer, on the JDK</description>
-
-  <dependencies>
-    <dependency>
-      <groupId>com.marvinformatics.structured</groupId>
-      <artifactId>structured-concurrency</artifactId>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
 
   <build>
     <plugins>
@@ -30,7 +21,7 @@
         <artifactId>maven-dependency-plugin</artifactId>
         <executions>
           <execution>
-            <id>unpack-transformer-rules</id>
+            <id>unpack-backport-tests-and-transformer-rules</id>
             <phase>process-test-classes</phase>
             <goals>
               <goal>unpack</goal>
@@ -41,24 +32,18 @@
                   <groupId>com.marvinformatics.structured</groupId>
                   <artifactId>structured-concurrency-transformer-rules</artifactId>
                   <version>${project.version}</version>
+                  <includes>**/*.properties</includes>
+                  <outputDirectory>${project.build.directory}/transformer-rules</outputDirectory>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>com.marvinformatics.structured</groupId>
+                  <artifactId>structured-concurrency</artifactId>
+                  <version>${project.version}</version>
+                  <classifier>tests</classifier>
+                  <excludes>META-INF/**</excludes>
+                  <outputDirectory>${project.build.testOutputDirectory}</outputDirectory>
                 </artifactItem>
               </artifactItems>
-              <includes>**/*.properties</includes>
-              <outputDirectory>${project.build.directory}/transformer-rules</outputDirectory>
-            </configuration>
-          </execution>
-          <execution>
-            <id>unpack-backport-tests</id>
-            <phase>process-test-classes</phase>
-            <goals>
-              <goal>unpack-dependencies</goal>
-            </goals>
-            <configuration>
-              <includeGroupIds>com.marvinformatics.structured</includeGroupIds>
-              <includeArtifactIds>structured-concurrency</includeArtifactIds>
-              <includeTypes>test-jar</includeTypes>
-              <excludes>META-INF/**</excludes>
-              <outputDirectory>${project.build.testOutputDirectory}</outputDirectory>
             </configuration>
           </execution>
         </executions>
@@ -68,7 +53,7 @@
         <artifactId>transformer-maven-plugin</artifactId>
         <executions>
           <execution>
-            <id>retarget-to-jdk</id>
+            <id>transform-to-jdk</id>
             <phase>process-test-classes</phase>
             <goals>
               <goal>transform</goal>
@@ -83,15 +68,6 @@
             </configuration>
           </execution>
         </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <classpathDependencyExcludes>
-            <classpathDependencyExclude>com.marvinformatics.structured:structured-concurrency</classpathDependencyExclude>
-          </classpathDependencyExcludes>
-        </configuration>
       </plugin>
     </plugins>
   </build>

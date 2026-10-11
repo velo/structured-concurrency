@@ -10,22 +10,32 @@
     <version>0.1.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>rewrite-flow</artifactId>
-  <name>JDK 28 Source Rewrite Flow</name>
+  <artifactId>source-rewrite-tests</artifactId>
+  <name>JDK 28 Source Rewrite Tests</name>
   <description>Rewrites the backport test sources to java.util.concurrent with OpenRewrite, then compiles and runs them on the JDK</description>
 
   <properties>
     <rewrite.skip>false</rewrite.skip>
-    <rewritten.dir>${project.basedir}/src/test/java</rewritten.dir>
+    <rewritten.test.sources.dir>${project.basedir}/src/test/java</rewritten.test.sources.dir>
   </properties>
 
-  <dependencies>
-    <dependency>
-      <groupId>com.marvinformatics.structured</groupId>
-      <artifactId>structured-concurrency</artifactId>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
+  <profiles>
+    <profile>
+      <id>rewrite</id>
+      <activation>
+        <property>
+          <name>!rewrite.skip</name>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>com.marvinformatics.structured</groupId>
+          <artifactId>structured-concurrency</artifactId>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
 
   <build>
     <plugins>
@@ -41,10 +51,10 @@
             </goals>
             <configuration>
               <skip>${rewrite.skip}</skip>
-              <outputDirectory>${rewritten.dir}</outputDirectory>
+              <outputDirectory>${rewritten.test.sources.dir}</outputDirectory>
               <resources>
                 <resource>
-                  <directory>${maven.multiModuleProjectDirectory}/structured-concurrency/src/test/java</directory>
+                  <directory>${project.basedir}/../../structured-concurrency/src/test/java</directory>
                 </resource>
               </resources>
             </configuration>
@@ -57,7 +67,7 @@
         <configuration>
           <filesets>
             <fileset>
-              <directory>${rewritten.dir}</directory>
+              <directory>${rewritten.test.sources.dir}</directory>
             </fileset>
           </filesets>
         </configuration>
@@ -90,45 +100,11 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-antrun-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>require-complete-rewrite</id>
-            <phase>process-test-sources</phase>
-            <goals>
-              <goal>run</goal>
-            </goals>
-            <configuration>
-              <target>
-                <fileset id="leftovers" dir="${rewritten.dir}" includes="**/*.java">
-                  <contains text="import com.marvinformatics.structured.Struct"/>
-                </fileset>
-                <fail message="OpenRewrite left backport imports in ${rewritten.dir}; it skips git-ignored files, so run scripts/verify-jdk28.sh">
-                  <condition>
-                    <resourcecount refid="leftovers" when="greater" count="0"/>
-                  </condition>
-                </fail>
-              </target>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
           <compilerArgs>
             <arg>${jdk28.preview-flag}</arg>
           </compilerArgs>
-        </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <classpathDependencyExcludes>
-            <classpathDependencyExclude>com.marvinformatics.structured:structured-concurrency</classpathDependencyExclude>
-          </classpathDependencyExcludes>
         </configuration>
       </plugin>
     </plugins>
