@@ -2,6 +2,7 @@ package com.marvinformatics.structured.spec;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.marvinformatics.structured.StructureViolationException;
 import com.marvinformatics.structured.StructuredTaskScope;
@@ -98,21 +99,21 @@ class ScopeLifecycleTest {
   }
 
   @Test
-  void closeWaitsForSubtasksToFinish() {
-    var finished = new AtomicBoolean();
+  void closeWithoutJoinThrowsAndStillWaitsForInterruptedSubtask() {
+    var subtaskCompletedCleanupAfterInterrupt = new AtomicBoolean();
     try (var scope = StructuredTaskScope.open()) {
       scope.fork(() -> {
         try {
           Thread.sleep(Duration.ofDays(1));
         } catch (InterruptedException e) {
           Thread.sleep(Duration.ofMillis(50));
-          finished.set(true);
+          subtaskCompletedCleanupAfterInterrupt.set(true);
         }
         return null;
       });
       assertThatThrownBy(scope::close).isInstanceOf(IllegalStateException.class);
     }
-    assertThat(finished).isTrue();
+    assertThat(subtaskCompletedCleanupAfterInterrupt).isTrue();
   }
 
   @Test
@@ -128,18 +129,19 @@ class ScopeLifecycleTest {
   @Test
   void onlyOwnerMayForkJoinOrClose() throws Exception {
     try (var scope = StructuredTaskScope.open()) {
-      Subtask<List<Class<?>>> subtask = scope.fork(() -> List.of(
-          thrownBy(() -> scope.fork(() -> null)),
-          thrownBy(scope::join),
-          thrownBy(scope::close)));
+      Subtask<List<Throwable>> subtask = scope.fork(() -> List.of(
+          catchThrowable(() -> scope.fork(() -> null)),
+          catchThrowable(scope::join),
+          catchThrowable(scope::close)));
       scope.join();
 
-      assertThat(subtask.get()).containsOnly(WrongThreadException.class);
+      assertThat(subtask.get()).hasExactlyElementsOfTypes(
+          WrongThreadException.class, WrongThreadException.class, WrongThreadException.class);
     }
   }
 
   @Test
-  void closingOuterScopeFirstIsStructureViolation() throws Exception {
+  void closingOuterScopeBeforeInnerThrowsStructureViolationAndInnerForkNeverRuns() throws Exception {
     try (var outer = StructuredTaskScope.open()) {
       try (var inner = StructuredTaskScope.open()) {
         assertThatThrownBy(outer::close).isInstanceOf(StructureViolationException.class);
@@ -201,24 +203,10 @@ class ScopeLifecycleTest {
     }
   }
 
-  private static Class<?> thrownBy(ThrowingRunnable action) {
-    try {
-      action.run();
-      return Void.class;
-    } catch (Throwable e) {
-      return e.getClass();
-    }
-  }
-
   private static void awaitState(Subtask<?> subtask, Subtask.State state)
       throws InterruptedException {
     while (subtask.state() != state) {
       Thread.sleep(Duration.ofMillis(5));
     }
-  }
-
-  @FunctionalInterface
-  private interface ThrowingRunnable {
-    void run() throws Throwable;
   }
 }

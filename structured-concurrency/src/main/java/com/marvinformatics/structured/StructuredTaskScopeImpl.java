@@ -16,13 +16,23 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.UnaryOperator;
 
+/**
+ * The only {@link StructuredTaskScope} implementation. Each scope tracks its subtask threads
+ * under one lock, and a per-thread stack of open scopes detects structure violations.
+ */
 final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
     implements StructuredTaskScope<T, R, R_X> {
 
   private static final ThreadLocal<Deque<StructuredTaskScopeImpl<?, ?, ?>>> OPEN_SCOPES =
       ThreadLocal.withInitial(ArrayDeque::new);
-  private static final ThreadLocal<StructuredTaskScopeImpl<?, ?, ?>> COMPLETING_IN =
+  private static final ThreadLocal<StructuredTaskScopeImpl<?, ?, ?>> SCOPE_RUNNING_ON_COMPLETE =
       new ThreadLocal<>();
+
+  private enum Phase {
+    FORKING,
+    JOINING,
+    JOINED,
+  }
 
   private final Joiner<T, R, R_X> joiner;
   private final ConfigImpl config;
@@ -31,15 +41,14 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
   private final ReentrantLock lock = new ReentrantLock();
   private final Condition stateChanged = lock.newCondition();
   private final Set<Thread> threads = new HashSet<>();
-  private Future<?> timer;
+  private Future<?> scheduledTimeout;
 
+  private volatile Phase phase = Phase.FORKING;
   private volatile boolean cancelled;
-  private volatile boolean timedOut;
-  private volatile boolean joined;
-  private boolean forked;
-  private boolean joinAttempted;
+  private boolean timedOut;
   private boolean closed;
-  private boolean detached;
+  private boolean forked;
+  private boolean removedFromOpenScopes;
 
   @SuppressWarnings("unchecked")
   private StructuredTaskScopeImpl(Joiner<? super T, ? extends R, R_X> joiner, ConfigImpl config) {
@@ -54,27 +63,27 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
     var config = (ConfigImpl) Objects.requireNonNull(configOperator.apply(ConfigImpl.DEFAULT));
     var scope = new StructuredTaskScopeImpl<T, R, R_X>(joiner, config);
     OPEN_SCOPES.get().push(scope);
-    scope.startTimer();
+    scope.scheduleTimeoutOrExpireNow();
     return scope;
   }
 
-  private void startTimer() {
+  private void scheduleTimeoutOrExpireNow() {
     Duration timeout = config.timeout();
     if (timeout == null) {
       return;
     }
     if (timeout.isPositive()) {
-      timer = TimeoutScheduler.INSTANCE.schedule(
-          this::expire, timeout.toNanos(), TimeUnit.NANOSECONDS);
+      scheduledTimeout = TimeoutScheduler.INSTANCE.schedule(
+          this::cancelDueToTimeout, timeout.toNanos(), TimeUnit.NANOSECONDS);
     } else {
-      expire();
+      cancelDueToTimeout();
     }
   }
 
-  private void expire() {
+  private void cancelDueToTimeout() {
     lock.lock();
     try {
-      if (!joined && !closed) {
+      if (phase != Phase.JOINED && !closed) {
         timedOut = true;
         cancel();
       }
@@ -86,18 +95,16 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
   @Override
   public <U extends T> Subtask<U> fork(Callable<? extends U> task) {
     Objects.requireNonNull(task, "task");
-    ensureOwner();
+    requireCurrentThreadIsOwner();
     if (closed) {
       throw new IllegalStateException("Scope is closed");
     }
-    if (joinAttempted) {
+    if (phase != Phase.FORKING) {
       throw new IllegalStateException("Already joined or join attempted");
     }
 
     var subtask = new SubtaskImpl<U>(this, task);
-    @SuppressWarnings("unchecked")
-    var asT = (Subtask<T>) (Subtask<?>) subtask;
-    if (joiner.onFork(asT)) {
+    if (joiner.onFork(forJoiner(subtask))) {
       cancel();
     }
     if (cancelled) {
@@ -105,21 +112,31 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
       return subtask;
     }
 
-    Thread thread = config.threadFactory().newThread(subtask::run);
+    Thread thread = config.threadFactory().newThread(subtask::callTaskAndReportToScope);
     if (thread == null) {
       throw new RejectedExecutionException("Thread factory did not create a thread");
     }
     forked = true;
+    startUnlessCancelled(thread);
+    return subtask;
+  }
+
+  private void startUnlessCancelled(Thread thread) {
     lock.lock();
     try {
-      if (!cancelled) {
-        threads.add(thread);
+      if (cancelled) {
+        return;
+      }
+      threads.add(thread);
+      try {
         thread.start();
+      } catch (Throwable e) {
+        threads.remove(thread);
+        throw e;
       }
     } finally {
       lock.unlock();
     }
-    return subtask;
   }
 
   @Override
@@ -133,24 +150,24 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
 
   @Override
   public R join() throws R_X, InterruptedException {
-    ensureOwner();
+    requireCurrentThreadIsOwner();
     lock.lock();
     try {
       if (closed) {
         throw new IllegalStateException("Scope is closed");
       }
-      if (joined) {
+      if (phase == Phase.JOINED) {
         throw new IllegalStateException("Already joined");
       }
-      joinAttempted = true;
+      phase = Phase.JOINING;
       if (Thread.interrupted()) {
         throw new InterruptedException();
       }
       while (!threads.isEmpty() && !cancelled) {
         stateChanged.await();
       }
-      joined = true;
-      cancelTimer();
+      phase = Phase.JOINED;
+      cancelScheduledTimeout();
     } finally {
       lock.unlock();
     }
@@ -164,22 +181,26 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
 
   @Override
   public void close() {
-    ensureOwner();
+    requireCurrentThreadIsOwner();
     if (closed) {
       return;
     }
 
-    Deque<StructuredTaskScopeImpl<?, ?, ?>> openScopes = OPEN_SCOPES.get();
-    boolean violation = false;
-    if (!detached) {
+    boolean innerScopesWereOpen = false;
+    if (!removedFromOpenScopes) {
+      Deque<StructuredTaskScopeImpl<?, ?, ?>> openScopes = OPEN_SCOPES.get();
       while (openScopes.peek() != this) {
-        violation = true;
-        openScopes.pop().detach();
+        innerScopesWereOpen = true;
+        popAndShutDownInnermost(openScopes);
       }
       openScopes.pop();
+      removedFromOpenScopes = true;
+      if (openScopes.isEmpty()) {
+        OPEN_SCOPES.remove();
+      }
     }
 
-    detach();
+    cancelAndAwaitForkedThreads();
     lock.lock();
     try {
       closed = true;
@@ -187,23 +208,28 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
       lock.unlock();
     }
 
-    if (violation) {
+    if (innerScopesWereOpen) {
       throw new StructureViolationException("Scope closed before nested scopes");
     }
-    if (forked && !joinAttempted) {
+    if (forked && phase == Phase.FORKING) {
       throw new IllegalStateException("Owner did not join after forking");
     }
   }
 
-  private void detach() {
-    detached = true;
+  private static void popAndShutDownInnermost(Deque<StructuredTaskScopeImpl<?, ?, ?>> openScopes) {
+    var innermost = openScopes.pop();
+    innermost.removedFromOpenScopes = true;
+    innermost.cancelAndAwaitForkedThreads();
+  }
+
+  private void cancelAndAwaitForkedThreads() {
     cancel();
     lock.lock();
     try {
       while (!threads.isEmpty()) {
         stateChanged.awaitUninterruptibly();
       }
-      cancelTimer();
+      cancelScheduledTimeout();
     } finally {
       lock.unlock();
     }
@@ -222,40 +248,43 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
     }
   }
 
-  private void cancelTimer() {
-    if (timer != null) {
-      timer.cancel(false);
-      timer = null;
+  private void cancelScheduledTimeout() {
+    if (scheduledTimeout != null) {
+      scheduledTimeout.cancel(false);
+      scheduledTimeout = null;
     }
   }
 
-  private void ensureOwner() {
+  private void requireCurrentThreadIsOwner() {
     if (Thread.currentThread() != owner) {
       throw new WrongThreadException("Current thread not owner");
     }
   }
 
-  private void complete(SubtaskImpl<?> subtask, Object result, Throwable failure) {
+  @SuppressWarnings("unchecked")
+  private Subtask<T> forJoiner(SubtaskImpl<?> subtask) {
+    return (Subtask<T>) subtask;
+  }
+
+  private void publishOutcomeAndNotifyJoiner(SubtaskImpl<?> subtask, Subtask.State outcome) {
     if (cancelled) {
       return;
     }
-    subtask.complete(result, failure);
-    COMPLETING_IN.set(this);
+    subtask.state = outcome;
+    SCOPE_RUNNING_ON_COMPLETE.set(this);
     try {
-      @SuppressWarnings("unchecked")
-      var asT = (Subtask<T>) subtask;
-      if (joiner.onComplete(asT)) {
+      if (joiner.onComplete(forJoiner(subtask))) {
         cancel();
       }
     } finally {
-      COMPLETING_IN.remove();
+      SCOPE_RUNNING_ON_COMPLETE.remove();
     }
   }
 
-  private void threadFinished(Thread thread) {
+  private void removeThreadAndSignalIfNoneLeft(Thread finishedThread) {
     lock.lock();
     try {
-      threads.remove(thread);
+      threads.remove(finishedThread);
       if (threads.isEmpty()) {
         stateChanged.signalAll();
       }
@@ -264,22 +293,23 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
     }
   }
 
-  private boolean outcomeVisible() {
-    return joined || COMPLETING_IN.get() == this;
+  private boolean canReadSubtaskOutcome() {
+    return phase == Phase.JOINED || SCOPE_RUNNING_ON_COMPLETE.get() == this;
   }
 
-  private static void closeLeftoverScopes() {
+  private static void cancelScopesLeftOpenByCurrentThread() {
     Deque<StructuredTaskScopeImpl<?, ?, ?>> openScopes = OPEN_SCOPES.get();
     while (!openScopes.isEmpty()) {
-      openScopes.pop().detach();
+      popAndShutDownInnermost(openScopes);
     }
     OPEN_SCOPES.remove();
   }
 
   @Override
   public String toString() {
-    String state = closed ? "closed" : cancelled ? "cancelled" : "open";
-    return "StructuredTaskScope[" + (config.name() != null ? config.name() + ", " : "") + state + "]";
+    String stateDescription = closed ? "closed" : cancelled ? "cancelled" : "open";
+    String namePrefix = config.name() != null ? config.name() + ", " : "";
+    return "StructuredTaskScope[" + namePrefix + stateDescription + "]";
   }
 
   static final class SubtaskImpl<T> implements Subtask<T> {
@@ -294,33 +324,23 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
       this.task = task;
     }
 
-    private void run() {
-      Thread current = Thread.currentThread();
+    private void callTaskAndReportToScope() {
+      Thread forkedThread = Thread.currentThread();
       try {
-        Object value = null;
-        Throwable thrown = null;
+        State outcome;
         try {
-          value = task.call();
+          result = task.call();
+          outcome = State.SUCCESS;
         } catch (Throwable e) {
-          thrown = e;
+          failure = e;
+          outcome = State.FAILED;
         }
-        closeLeftoverScopes();
-        scope.complete(this, value, thrown);
+        cancelScopesLeftOpenByCurrentThread();
+        scope.publishOutcomeAndNotifyJoiner(this, outcome);
       } catch (Throwable e) {
-        current.getUncaughtExceptionHandler().uncaughtException(current, e);
+        forkedThread.getUncaughtExceptionHandler().uncaughtException(forkedThread, e);
       } finally {
-        scope.threadFinished(current);
-      }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void complete(Object value, Throwable thrown) {
-      if (thrown == null) {
-        result = (T) value;
-        state = State.SUCCESS;
-      } else {
-        failure = thrown;
-        state = State.FAILED;
+        scope.removeThreadAndSignalIfNoneLeft(forkedThread);
       }
     }
 
@@ -331,7 +351,7 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
 
     @Override
     public T get() {
-      if (state != State.SUCCESS || !scope.outcomeVisible()) {
+      if (state != State.SUCCESS || !scope.canReadSubtaskOutcome()) {
         throw new IllegalStateException("Result not available");
       }
       return result;
@@ -339,7 +359,7 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
 
     @Override
     public Throwable exception() {
-      if (state != State.FAILED || !scope.outcomeVisible()) {
+      if (state != State.FAILED || !scope.canReadSubtaskOutcome()) {
         throw new IllegalStateException("Exception not available");
       }
       return failure;
@@ -347,12 +367,12 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
 
     @Override
     public String toString() {
-      String status = switch (state) {
+      String stateDescription = switch (state) {
         case UNAVAILABLE -> "Unavailable";
         case SUCCESS -> "Completed successfully";
         case FAILED -> "Failed: " + failure;
       };
-      return "Subtask[" + status + "]";
+      return "Subtask[" + stateDescription + "]";
     }
   }
 
@@ -378,9 +398,9 @@ final class StructuredTaskScopeImpl<T, R, R_X extends Throwable>
   }
 
   private static final class TimeoutScheduler {
-    static final ScheduledThreadPoolExecutor INSTANCE = create();
+    static final ScheduledThreadPoolExecutor INSTANCE = createDaemonTimeoutExecutor();
 
-    private static ScheduledThreadPoolExecutor create() {
+    private static ScheduledThreadPoolExecutor createDaemonTimeoutExecutor() {
       var executor = new ScheduledThreadPoolExecutor(1, Thread.ofPlatform()
           .name("structured-task-scope-timeout")
           .daemon()

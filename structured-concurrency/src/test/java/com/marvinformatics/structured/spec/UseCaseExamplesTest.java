@@ -2,6 +2,7 @@ package com.marvinformatics.structured.spec;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 
 import com.marvinformatics.structured.StructuredTaskScope;
 import com.marvinformatics.structured.StructuredTaskScope.CancelledByTimeoutException;
@@ -34,27 +35,27 @@ class UseCaseExamplesTest {
 
   record Page(User user, List<Order> orders) {}
 
-  static User findUser(String id) throws InterruptedException {
+  static User fetchStubUserAfterDelay(String userId) throws InterruptedException {
     Thread.sleep(Duration.ofMillis(20));
-    return new User(id, "Duke");
+    return new User(userId, "Duke");
   }
 
-  static List<Order> fetchOrders(String userId) throws InterruptedException {
+  static List<Order> fetchStubOrdersAfterDelay(String userId) throws InterruptedException {
     Thread.sleep(Duration.ofMillis(30));
     return List.of(new Order(userId + "-1", 10), new Order(userId + "-2", 32));
   }
 
-  static String slow(String value, Duration delay) throws InterruptedException {
+  static String sleepThenReturn(String valueToReturn, Duration delay) throws InterruptedException {
     Thread.sleep(delay);
-    return value;
+    return valueToReturn;
   }
 
   @Test
   void fanOutAndCombineHeterogeneousResults() throws Exception {
     Page page;
     try (var scope = StructuredTaskScope.open()) {
-      Subtask<User> user = scope.fork(() -> findUser("42"));
-      Subtask<List<Order>> orders = scope.fork(() -> fetchOrders("42"));
+      Subtask<User> user = scope.fork(() -> fetchStubUserAfterDelay("42"));
+      Subtask<List<Order>> orders = scope.fork(() -> fetchStubOrdersAfterDelay("42"));
 
       scope.join();
       page = new Page(user.get(), orders.get());
@@ -64,7 +65,7 @@ class UseCaseExamplesTest {
     assertThat(page.orders()).extracting(Order::total).containsExactly(10, 32);
   }
 
-  static <T> List<T> invokeAll(Collection<Callable<T>> tasks) throws InterruptedException {
+  static <T> List<T> invokeAllOrFailFast(Collection<Callable<T>> tasks) throws InterruptedException {
     try (var scope = StructuredTaskScope.open(
         Joiner.<T, CompletionException>allSuccessfulOrThrow(CompletionException::new))) {
       tasks.forEach(scope::fork);
@@ -73,7 +74,7 @@ class UseCaseExamplesTest {
   }
 
   @Test
-  void invokeAllKeepsSubmissionOrder() throws Exception {
+  void invokeAllOrFailFastKeepsSubmissionOrder() throws Exception {
     List<Callable<Integer>> tasks = IntStream.rangeClosed(1, 5)
         .<Callable<Integer>>mapToObj(i -> () -> {
           Thread.sleep(Duration.ofMillis(60 - i * 10));
@@ -81,18 +82,18 @@ class UseCaseExamplesTest {
         })
         .toList();
 
-    assertThat(invokeAll(tasks)).containsExactly(1, 4, 9, 16, 25);
+    assertThat(invokeAllOrFailFast(tasks)).containsExactly(1, 4, 9, 16, 25);
   }
 
   @Test
-  void invokeAllFailsWithTheFirstFailure() {
+  void invokeAllOrFailFastThrowsCompletionExceptionCausedByFailedTask() {
     List<Callable<Integer>> tasks = List.of(
         () -> 1,
         () -> {
           throw new IllegalStateException("inventory service down");
         });
 
-    assertThatThrownBy(() -> invokeAll(tasks))
+    assertThatThrownBy(() -> invokeAllOrFailFast(tasks))
         .isInstanceOf(CompletionException.class)
         .rootCause()
         .hasMessage("inventory service down");
@@ -101,9 +102,9 @@ class UseCaseExamplesTest {
   @Test
   void raceReplicasAndTakeTheFastest() throws Exception {
     var losersInterrupted = new CountDownLatch(2);
-    Callable<String> replica = () -> {
+    Callable<String> slowReplica = () -> {
       try {
-        return slow("eu", Duration.ofDays(1));
+        return sleepThenReturn("eu", Duration.ofDays(1));
       } catch (InterruptedException e) {
         losersInterrupted.countDown();
         throw e;
@@ -111,9 +112,9 @@ class UseCaseExamplesTest {
     };
 
     try (var scope = StructuredTaskScope.open(Joiner.<String>anySuccessfulOrThrow())) {
-      scope.fork(replica);
-      scope.fork(replica);
-      scope.fork(() -> slow("us", Duration.ofMillis(10)));
+      scope.fork(slowReplica);
+      scope.fork(slowReplica);
+      scope.fork(() -> sleepThenReturn("us", Duration.ofMillis(10)));
 
       assertThat(scope.join()).isEqualTo("us");
     }
@@ -126,7 +127,7 @@ class UseCaseExamplesTest {
       scope.fork(() -> {
         throw new IllegalStateException("primary failed");
       });
-      scope.fork(() -> slow("backup", Duration.ofMillis(20)));
+      scope.fork(() -> sleepThenReturn("backup", Duration.ofMillis(20)));
 
       assertThat(scope.join()).isEqualTo("backup");
     }
@@ -137,7 +138,7 @@ class UseCaseExamplesTest {
     String recommendation;
     try (var scope = StructuredTaskScope.open(
         Joiner.<String>anySuccessfulOrThrow(), cf -> cf.withTimeout(Duration.ofMillis(50)))) {
-      scope.fork(() -> slow("personalized", Duration.ofDays(1)));
+      scope.fork(() -> sleepThenReturn("personalized", Duration.ofDays(1)));
       recommendation = scope.join();
     } catch (ExecutionException e) {
       recommendation = switch (e.getCause()) {
@@ -159,7 +160,7 @@ class UseCaseExamplesTest {
     List<String> results;
     try (var scope = StructuredTaskScope.open(
         Joiner.<String>allUntil(_ -> false), cf -> cf.withTimeout(Duration.ofMillis(500)))) {
-      backends.forEach((name, latency) -> scope.fork(() -> slow(name, latency)));
+      backends.forEach((name, latency) -> scope.fork(() -> sleepThenReturn(name, latency)));
 
       results = scope.join().stream()
           .filter(subtask -> subtask.state() == Subtask.State.SUCCESS)
@@ -182,29 +183,33 @@ class UseCaseExamplesTest {
     }
 
     try (var scope = StructuredTaskScope.open(Joiner.<String>allUntil(new CancelAfterTwoFailures()))) {
-      for (int i = 0; i < 3; i++) {
+      for (int i = 0; i < 2; i++) {
         scope.fork(() -> {
           throw new IllegalStateException("flaky");
         });
       }
-      scope.fork(() -> slow("never", Duration.ofDays(1)));
+      scope.fork(() -> {
+        Thread.sleep(Duration.ofDays(1));
+        throw new IllegalStateException("fails too late to count");
+      });
+      scope.fork(() -> sleepThenReturn("never", Duration.ofDays(1)));
 
       Map<Subtask.State, Long> byState = scope.join().stream()
           .collect(Collectors.groupingBy(Subtask::state, Collectors.counting()));
 
       assertThat(scope.isCancelled()).isTrue();
-      assertThat(byState.get(Subtask.State.FAILED)).isGreaterThanOrEqualTo(2);
-      assertThat(byState).doesNotContainKey(Subtask.State.SUCCESS);
+      assertThat(byState).containsOnly(
+          entry(Subtask.State.FAILED, 2L), entry(Subtask.State.UNAVAILABLE, 2L));
     }
   }
 
   static final class Quorum<T> implements Joiner<T, List<T>, ExecutionException> {
-    private final int required;
+    private final int requiredSuccessCount;
     private final Queue<T> results = new ConcurrentLinkedQueue<>();
     private final AtomicInteger successes = new AtomicInteger();
 
-    Quorum(int required) {
-      this.required = required;
+    Quorum(int requiredSuccessCount) {
+      this.requiredSuccessCount = requiredSuccessCount;
     }
 
     @Override
@@ -213,15 +218,15 @@ class UseCaseExamplesTest {
         return false;
       }
       results.add(subtask.get());
-      return successes.incrementAndGet() >= required;
+      return successes.incrementAndGet() >= requiredSuccessCount;
     }
 
     @Override
     public List<T> result() throws ExecutionException {
-      if (successes.get() < required) {
-        throw new ExecutionException(new NoSuchElementException("quorum of " + required + " not reached"));
+      if (successes.get() < requiredSuccessCount) {
+        throw new ExecutionException(new NoSuchElementException("quorum of " + requiredSuccessCount + " not reached"));
       }
-      return results.stream().limit(required).toList();
+      return results.stream().limit(requiredSuccessCount).toList();
     }
 
     @Override
@@ -233,9 +238,9 @@ class UseCaseExamplesTest {
   @Test
   void customJoinerWaitsForQuorum() throws Exception {
     try (var scope = StructuredTaskScope.open(new Quorum<String>(2))) {
-      scope.fork(() -> slow("a", Duration.ofMillis(5)));
-      scope.fork(() -> slow("b", Duration.ofMillis(10)));
-      scope.fork(() -> slow("c", Duration.ofDays(1)));
+      scope.fork(() -> sleepThenReturn("a", Duration.ofMillis(5)));
+      scope.fork(() -> sleepThenReturn("b", Duration.ofMillis(10)));
+      scope.fork(() -> sleepThenReturn("c", Duration.ofDays(1)));
       scope.fork(() -> {
         throw new IllegalStateException("replica d down");
       });
@@ -245,7 +250,7 @@ class UseCaseExamplesTest {
     }
   }
 
-  static final class CollectAllFailures implements Joiner<Object, Void, IllegalStateException> {
+  static final class FailureAggregatingJoiner implements Joiner<Object, Void, IllegalStateException> {
     private final Queue<Throwable> failures = new ConcurrentLinkedQueue<>();
 
     @Override
@@ -259,9 +264,9 @@ class UseCaseExamplesTest {
     @Override
     public Void result() {
       if (!failures.isEmpty()) {
-        var aggregate = new IllegalStateException(failures.size() + " validations failed");
-        failures.forEach(aggregate::addSuppressed);
-        throw aggregate;
+        var aggregateFailure = new IllegalStateException(failures.size() + " validations failed");
+        failures.forEach(aggregateFailure::addSuppressed);
+        throw aggregateFailure;
       }
       return null;
     }
@@ -275,7 +280,7 @@ class UseCaseExamplesTest {
   @Test
   void customJoinerReportsEveryFailure() {
     assertThatThrownBy(() -> {
-      try (var scope = StructuredTaskScope.open(new CollectAllFailures())) {
+      try (var scope = StructuredTaskScope.open(new FailureAggregatingJoiner())) {
         scope.fork(() -> {
           throw new IllegalArgumentException("email is invalid");
         });
@@ -296,18 +301,18 @@ class UseCaseExamplesTest {
   @Test
   void nestedScopesFormATaskTree() throws Exception {
     try (var scope = StructuredTaskScope.open()) {
-      Subtask<User> user = scope.fork(() -> findUser("7"));
-      Subtask<Integer> spent = scope.fork(() -> {
+      Subtask<User> user = scope.fork(() -> fetchStubUserAfterDelay("7"));
+      Subtask<Integer> totalOrderAmount = scope.fork(() -> {
         try (var inner = StructuredTaskScope.open(Joiner.<List<Order>>allSuccessfulOrThrow())) {
-          inner.fork(() -> fetchOrders("7-web"));
-          inner.fork(() -> fetchOrders("7-store"));
+          inner.fork(() -> fetchStubOrdersAfterDelay("7-web"));
+          inner.fork(() -> fetchStubOrdersAfterDelay("7-store"));
           return inner.join().stream().flatMap(List::stream).mapToInt(Order::total).sum();
         }
       });
 
       scope.join();
       assertThat(user.get().id()).isEqualTo("7");
-      assertThat(spent.get()).isEqualTo(84);
+      assertThat(totalOrderAmount.get()).isEqualTo(84);
     }
   }
 
@@ -336,29 +341,29 @@ class UseCaseExamplesTest {
 
   @Test
   void boundedConcurrencyWithSemaphore() throws Exception {
-    var permits = new Semaphore(3);
-    var running = new AtomicInteger();
-    var peak = new AtomicInteger();
+    var concurrencyLimiter = new Semaphore(3);
+    var runningTaskCount = new AtomicInteger();
+    var peakRunningTaskCount = new AtomicInteger();
 
     try (var scope = StructuredTaskScope.open(Joiner.<Integer>allSuccessfulOrThrow())) {
       for (int i = 0; i < 20; i++) {
-        int id = i;
+        int taskId = i;
         scope.fork(() -> {
-          permits.acquire();
+          concurrencyLimiter.acquire();
           try {
-            peak.accumulateAndGet(running.incrementAndGet(), Math::max);
+            peakRunningTaskCount.accumulateAndGet(runningTaskCount.incrementAndGet(), Math::max);
             Thread.sleep(Duration.ofMillis(10));
-            return id;
+            return taskId;
           } finally {
-            running.decrementAndGet();
-            permits.release();
+            runningTaskCount.decrementAndGet();
+            concurrencyLimiter.release();
           }
         });
       }
 
       assertThat(scope.join()).hasSize(20);
     }
-    assertThat(peak.get()).isBetween(1, 3);
+    assertThat(peakRunningTaskCount.get()).isLessThanOrEqualTo(3);
   }
 
   static final class PaymentDeclined extends RuntimeException {
@@ -386,40 +391,40 @@ class UseCaseExamplesTest {
 
   @Test
   void interruptingTheOwnerCancelsTheWholeTree() throws Exception {
-    var started = new CountDownLatch(2);
-    var cancelled = new CountDownLatch(2);
-    var outcome = new ConcurrentLinkedQueue<Class<?>>();
+    var subtasksStarted = new CountDownLatch(2);
+    var subtasksInterrupted = new CountDownLatch(2);
+    var ownerExceptionTypes = new ConcurrentLinkedQueue<Class<?>>();
 
     Thread owner = Thread.ofVirtual().start(() -> {
       try (var scope = StructuredTaskScope.open()) {
         for (int i = 0; i < 2; i++) {
           scope.fork(() -> {
-            started.countDown();
+            subtasksStarted.countDown();
             try {
               Thread.sleep(Duration.ofDays(1));
             } catch (InterruptedException e) {
-              cancelled.countDown();
+              subtasksInterrupted.countDown();
             }
           });
         }
         scope.join();
       } catch (Exception e) {
-        outcome.add(e.getClass());
+        ownerExceptionTypes.add(e.getClass());
       }
     });
 
-    started.await();
+    subtasksStarted.await();
     owner.interrupt();
     owner.join();
 
-    assertThat(outcome).containsExactly(InterruptedException.class);
-    assertThat(cancelled.getCount()).isZero();
+    assertThat(ownerExceptionTypes).containsExactly(InterruptedException.class);
+    assertThat(subtasksInterrupted.getCount()).isZero();
   }
 
   @Test
   void optionalEnrichmentDoesNotFailTheRequest() throws Exception {
     try (var scope = StructuredTaskScope.open(Joiner.<Object>allUntil(_ -> false))) {
-      Subtask<User> user = scope.fork(() -> findUser("1"));
+      Subtask<User> user = scope.fork(() -> fetchStubUserAfterDelay("1"));
       Subtask<String> avatar = scope.fork(() -> {
         throw new IllegalStateException("avatar service down");
       });

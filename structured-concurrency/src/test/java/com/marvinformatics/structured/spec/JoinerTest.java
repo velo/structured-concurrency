@@ -83,7 +83,7 @@ class JoinerTest {
   }
 
   @Test
-  void allUntilGroupsSubtasksByState() throws Exception {
+  void allUntilReturnsBothSucceededAndFailedSubtasks() throws Exception {
     try (var scope = StructuredTaskScope.open(Joiner.<String>allUntil(_ -> false))) {
       scope.fork(() -> "ok");
       scope.fork(() -> {

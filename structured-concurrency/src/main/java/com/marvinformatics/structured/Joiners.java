@@ -11,44 +11,41 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+/** The built-in joiners returned by the static factories of {@link Joiner}. */
 final class Joiners {
 
   private Joiners() {}
 
-  private static void requireUnavailable(Subtask<?> subtask) {
-    if (subtask.state() != Subtask.State.UNAVAILABLE) {
-      throw new IllegalArgumentException("Subtask not in UNAVAILABLE state");
+  private abstract static class ThrowingJoiner<T, R, R_X extends Throwable>
+      implements Joiner<T, R, R_X> {
+    private final Function<Throwable, R_X> exceptionFactory;
+
+    ThrowingJoiner(Function<Throwable, R_X> exceptionFactory) {
+      this.exceptionFactory = Objects.requireNonNull(exceptionFactory);
     }
-  }
 
-  private static void requireCompleted(Subtask<?> subtask) {
-    if (subtask.state() == Subtask.State.UNAVAILABLE) {
-      throw new IllegalArgumentException("Subtask has not completed");
-    }
-  }
-
-  private static <R_X extends Throwable> R_X exception(
-      Function<Throwable, R_X> esf, Throwable cause) {
-    return Objects.requireNonNull(esf.apply(cause), "exception supplying function returned null");
-  }
-
-  private abstract static class FailFast<T, R, R_X extends Throwable> implements Joiner<T, R, R_X> {
-    private final Function<Throwable, R_X> esf;
-    private final AtomicReference<Throwable> firstFailure = new AtomicReference<>();
-
-    FailFast(Function<Throwable, R_X> esf) {
-      this.esf = Objects.requireNonNull(esf);
+    R_X mapException(Throwable cause) {
+      return Objects.requireNonNull(
+          exceptionFactory.apply(cause), "exception supplying function returned null");
     }
 
     @Override
-    public boolean onFork(Subtask<T> subtask) {
-      requireUnavailable(subtask);
-      return false;
+    public R timeout() throws R_X {
+      throw mapException(new CancelledByTimeoutException());
+    }
+  }
+
+  private abstract static class FailFast<T, R, R_X extends Throwable>
+      extends ThrowingJoiner<T, R, R_X> {
+    private final AtomicReference<Throwable> firstFailure = new AtomicReference<>();
+
+    FailFast(Function<Throwable, R_X> exceptionFactory) {
+      super(exceptionFactory);
     }
 
     @Override
     public boolean onComplete(Subtask<T> subtask) {
-      requireCompleted(subtask);
+      super.onComplete(subtask);
       return subtask.state() == Subtask.State.FAILED
           && firstFailure.compareAndSet(null, subtask.exception());
     }
@@ -57,24 +54,19 @@ final class Joiners {
     public R result() throws R_X {
       Throwable failure = firstFailure.get();
       if (failure != null) {
-        throw exception(esf, failure);
+        throw mapException(failure);
       }
-      return success();
+      return collectSuccessfulResult();
     }
 
-    @Override
-    public R timeout() throws R_X {
-      throw exception(esf, new CancelledByTimeoutException());
-    }
-
-    abstract R success();
+    abstract R collectSuccessfulResult();
   }
 
   static final class AllSuccessful<T, R_X extends Throwable> extends FailFast<T, List<T>, R_X> {
     private final List<Subtask<T>> subtasks = new ArrayList<>();
 
-    AllSuccessful(Function<Throwable, R_X> esf) {
-      super(esf);
+    AllSuccessful(Function<Throwable, R_X> exceptionFactory) {
+      super(exceptionFactory);
     }
 
     @Override
@@ -85,40 +77,33 @@ final class Joiners {
     }
 
     @Override
-    List<T> success() {
+    List<T> collectSuccessfulResult() {
       return subtasks.stream().map(Subtask::get).toList();
     }
   }
 
   static final class AwaitAllSuccessful<T, R_X extends Throwable> extends FailFast<T, Void, R_X> {
-    AwaitAllSuccessful(Function<Throwable, R_X> esf) {
-      super(esf);
+    AwaitAllSuccessful(Function<Throwable, R_X> exceptionFactory) {
+      super(exceptionFactory);
     }
 
     @Override
-    Void success() {
+    Void collectSuccessfulResult() {
       return null;
     }
   }
 
-  static final class AnySuccessful<T, R_X extends Throwable> implements Joiner<T, T, R_X> {
-    private final Function<Throwable, R_X> esf;
+  static final class AnySuccessful<T, R_X extends Throwable> extends ThrowingJoiner<T, T, R_X> {
     private final AtomicReference<Subtask<T>> firstSuccess = new AtomicReference<>();
     private final AtomicReference<Throwable> firstFailure = new AtomicReference<>();
 
-    AnySuccessful(Function<Throwable, R_X> esf) {
-      this.esf = Objects.requireNonNull(esf);
-    }
-
-    @Override
-    public boolean onFork(Subtask<T> subtask) {
-      requireUnavailable(subtask);
-      return false;
+    AnySuccessful(Function<Throwable, R_X> exceptionFactory) {
+      super(exceptionFactory);
     }
 
     @Override
     public boolean onComplete(Subtask<T> subtask) {
-      requireCompleted(subtask);
+      super.onComplete(subtask);
       if (subtask.state() == Subtask.State.SUCCESS) {
         return firstSuccess.compareAndSet(null, subtask);
       }
@@ -128,39 +113,34 @@ final class Joiners {
 
     @Override
     public T result() throws R_X {
-      Subtask<T> success = firstSuccess.get();
-      if (success != null) {
-        return success.get();
+      Subtask<T> firstSuccessfulSubtask = firstSuccess.get();
+      if (firstSuccessfulSubtask != null) {
+        return firstSuccessfulSubtask.get();
       }
       Throwable failure = firstFailure.get();
-      throw exception(esf, failure != null ? failure : new NoSuchElementException("No subtasks"));
-    }
-
-    @Override
-    public T timeout() throws R_X {
-      throw exception(esf, new CancelledByTimeoutException());
+      throw mapException(failure != null ? failure : new NoSuchElementException("No subtasks"));
     }
   }
 
   static final class AllUntil<T> implements Joiner<T, List<Subtask<T>>, RuntimeException> {
-    private final Predicate<? super Subtask<T>> isDone;
+    private final Predicate<? super Subtask<T>> shouldCancelScope;
     private final List<Subtask<T>> subtasks = new ArrayList<>();
 
-    AllUntil(Predicate<? super Subtask<T>> isDone) {
-      this.isDone = Objects.requireNonNull(isDone);
+    AllUntil(Predicate<? super Subtask<T>> shouldCancelScope) {
+      this.shouldCancelScope = Objects.requireNonNull(shouldCancelScope);
     }
 
     @Override
     public boolean onFork(Subtask<T> subtask) {
-      requireUnavailable(subtask);
+      Joiner.super.onFork(subtask);
       subtasks.add(subtask);
       return false;
     }
 
     @Override
     public boolean onComplete(Subtask<T> subtask) {
-      requireCompleted(subtask);
-      return isDone.test(subtask);
+      Joiner.super.onComplete(subtask);
+      return shouldCancelScope.test(subtask);
     }
 
     @Override
