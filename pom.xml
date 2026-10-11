@@ -36,6 +36,8 @@
 
   <modules>
     <module>structured-concurrency</module>
+    <module>structured-concurrency-rewrite</module>
+    <module>structured-concurrency-transformer-rules</module>
   </modules>
 
   <profiles>
