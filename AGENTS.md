@@ -58,6 +58,9 @@ rules exist.
   description. Never raise the comment-to-code ratio of a file.
 - Assertions must be exact. No `containsAnyOf`, `satisfiesAnyOf` or similar.
 - End every file with a newline, and leave no trailing whitespace.
+- Declare every plugin and dependency version as a `<name>.version` property in the parent
+  `pom.xml`, and reference it from `pluginManagement` or `dependencyManagement`. Child poms carry
+  no versions except `${project.version}` for this project's own modules.
 
 ## Git
 

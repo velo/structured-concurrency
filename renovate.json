@@ -1,6 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
+  "enabledManagers": ["custom.regex", "maven-wrapper"],
   "customManagers": [
     {
       "customType": "regex",
@@ -12,11 +13,8 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^pom\\.xml$/", "/^scripts/verify-jdk28\\.sh$/"],
-      "matchStrings": [
-        "<jdk28\\.image>(?<depName>openjdk):(?<currentValue>[^<]+)</jdk28\\.image>",
-        "JDK28_IMAGE:-(?<depName>openjdk):(?<currentValue>[^}]+)}"
-      ],
+      "managerFilePatterns": ["/^pom\\.xml$/"],
+      "matchStrings": ["<jdk28\\.image>(?<depName>openjdk):(?<currentValue>[^<]+)</jdk28\\.image>"],
       "datasourceTemplate": "docker",
       "versioningTemplate": "regex:^(?<major>\\d+)-ea-(?<patch>\\d+)-jdk$"
     }
