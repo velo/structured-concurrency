@@ -1,0 +1,43 @@
+site_name: Structured Concurrency Backport
+site_description: The JDK 28 StructuredTaskScope API for JDK 21 and later, with tools to migrate to the JDK
+site_url: https://velo.github.io/structured-concurrency/
+repo_url: https://github.com/velo/structured-concurrency
+repo_name: velo/structured-concurrency
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - navigation.sections
+    - navigation.footer
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Concepts: concepts.md
+  - Joiners: joiners.md
+  - Patterns: patterns.md
+  - Migrating to the JDK: migration.md
+  - API reference: https://velo.github.io/structured-concurrency/api/

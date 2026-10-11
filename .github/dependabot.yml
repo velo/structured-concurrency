@@ -10,6 +10,10 @@ updates:
       maven-dependencies:
         patterns: ["*"]
         exclude-patterns: ["*-plugin"]
+  - package-ecosystem: pip
+    directory: /docs
+    schedule:
+      interval: weekly
   - package-ecosystem: github-actions
     directory: /
     schedule:

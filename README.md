@@ -18,6 +18,10 @@ try (var scope = StructuredTaskScope.open()) {
 }
 ```
 
+**Documentation:** [velo.github.io/structured-concurrency](https://velo.github.io/structured-concurrency/)
+has a guide, a page of tested patterns and the
+[API reference](https://velo.github.io/structured-concurrency/api/).
+
 On JDK 28, the same code compiles with `java.util.concurrent` in place of
 `com.marvinformatics.structured`. That package change is the whole migration, and both migration
 tools here automate it.
