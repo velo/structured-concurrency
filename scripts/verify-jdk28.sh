@@ -10,7 +10,7 @@ readonly PROJECT_ROOT
 readonly JDK25_IMAGE="${JDK25_IMAGE:-eclipse-temurin:25-jdk}"
 readonly JDK28_IMAGE="${JDK28_IMAGE:-openjdk:28-ea-18-jdk}"
 readonly MAVEN_REPO="${MAVEN_REPO:-${HOME}/.m2}"
-readonly JDK28_MODULES="structured-concurrency,jdk28/api-alignment,\
+readonly JDK28_MODULES="structured-concurrency,upstream-conformance,jdk28/api-alignment,\
 jdk28/transform-flow,jdk28/rewrite-flow"
 
 usage() {
@@ -47,17 +47,25 @@ stage() {
 #   MAVEN_REPO
 #   PROJECT_ROOT
 # Arguments:
-#   Docker image, then Maven arguments.
+#   Docker image, extra docker options, "--", then Maven arguments.
 #######################################
 mvnw_in() {
   local image="$1"
+  local -a docker_opts=()
+  shift
+  while [[ "$1" != '--' ]]; do
+    docker_opts+=("$1")
+    shift
+  done
   shift
   docker run --rm \
     -u "$(id -u):$(id -g)" \
     -e HOME=/tmp/home \
+    -e MAVEN_OPTS=-Duser.home=/tmp/home \
     -v "${MAVEN_REPO}:/tmp/home/.m2" \
     -v "${PROJECT_ROOT}:/work" \
     -w /work \
+    "${docker_opts[@]}" \
     "${image}" \
     ./mvnw -B "$@"
 }
@@ -91,17 +99,25 @@ main() {
   # Created up front so Docker does not create it owned by root.
   mkdir -p "${MAVEN_REPO}"
 
+  local -a hide_git=(--mount "type=tmpfs,destination=/work/.git")
+  if [[ -f "${PROJECT_ROOT}/.git" ]]; then
+    hide_git=(-v /dev/null:/work/.git:ro)
+  fi
+
   if [[ "${skip_install}" == 'false' ]]; then
     stage "[1/3] Building and installing on ${JDK25_IMAGE}"
-    mvnw_in "${JDK25_IMAGE}" install "${maven_args[@]}"
+    mvnw_in "${JDK25_IMAGE}" -- install "${maven_args[@]}"
   fi
 
   stage "[2/3] Rewriting backport tests with OpenRewrite on ${JDK25_IMAGE}"
-  mvnw_in "${JDK25_IMAGE}" -Pjdk28 -pl jdk28/rewrite-flow -Denforcer.skip \
+  # OpenRewrite skips git-ignored files, and the rewritten sources are
+  # git-ignored, so hide the repository from this stage.
+  mvnw_in "${JDK25_IMAGE}" "${hide_git[@]}" -- \
+    -Pjdk28 -pl jdk28/rewrite-flow -Denforcer.skip \
     clean process-test-sources "${maven_args[@]}"
 
   stage "[3/3] Verifying against the JDK on ${JDK28_IMAGE}"
-  mvnw_in "${JDK28_IMAGE}" -Pjdk28 -Drewrite.skip -pl "${JDK28_MODULES}" \
+  mvnw_in "${JDK28_IMAGE}" -- -Pjdk28 -Drewrite.skip -pl "${JDK28_MODULES}" \
     verify "${maven_args[@]}"
 
   stage "All JDK 28 flows passed"
