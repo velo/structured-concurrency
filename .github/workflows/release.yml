@@ -1,0 +1,51 @@
+name: release
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+
+      - name: Import GPG key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "default-key $(gpg --list-keys --with-colons | grep pub | cut -d':' -f5)" >> ~/.gnupg/gpg.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+
+      # Passed through the environment and quoted: the secret carries its own XML attribute quotes.
+      - name: Generate settings.xml
+        env:
+          SERVER_CENTRAL: ${{ secrets.MAVEN_SETTINGS_SERVER_CENTRAL }}
+        run: |
+          mkdir -p ~/.m2
+          {
+            echo '<settings><servers>'
+            printf '%s\n' "$SERVER_CENTRAL"
+            echo '</servers></settings>'
+          } > ~/.m2/settings.xml
+
+      - name: Set the release version from the tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: ./mvnw -B versions:set -DnewVersion="${TAG#v}" -DprocessAllModules=true -DgenerateBackupPoms=false
+
+      - name: Build, sign and publish to Central
+        run: ./mvnw -B clean deploy -Prelease

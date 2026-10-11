@@ -12,6 +12,7 @@
 
   <artifactId>structured-concurrency</artifactId>
   <name>Structured Concurrency</name>
+  <description>The JDK 28 StructuredTaskScope API as a library for JDK 21 and later</description>
 
 
   <dependencies>
@@ -50,4 +51,18 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

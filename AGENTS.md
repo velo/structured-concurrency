@@ -64,6 +64,26 @@ rules exist.
   `pom.xml`, and reference it from `pluginManagement` or `dependencyManagement`. Child poms carry
   no versions except `${project.version}` for this project's own modules.
 
+## Releasing
+
+1. On `main`, set every module to `X.Y.Z` with
+   `./mvnw versions:set -DnewVersion=X.Y.Z -DprocessAllModules=true -DgenerateBackupPoms=false`
+   and commit as `Release X.Y.Z`.
+2. Set every module to the next `X.Y.(Z+1)-SNAPSHOT` the same way and commit as
+   `Prepare next development iteration X.Y.(Z+1)-SNAPSHOT`.
+3. Push `main`, then create a GitHub Release with tag `vX.Y.Z` on the `Release X.Y.Z` commit:
+   `gh release create vX.Y.Z --target <release commit> --generate-notes`.
+4. The `release: created` event runs `release.yml`. It checks out the tag, sets the version from
+   the tag name, and runs `./mvnw clean deploy -Prelease`. That profile attaches sources and
+   javadoc, signs with GPG, and publishes the parent, `structured-concurrency`,
+   `structured-concurrency-rewrite` and `structured-concurrency-transformer-rules` through the
+   Central Publishing Portal. `build.yml` builds the same tag separately.
+5. Only modules that declare `central-publishing-maven-plugin` in their own `release` profile are
+   published. Don't add it to modules that attach no artifact, such as `upstream-conformance`.
+
+Nothing deploys a SNAPSHOT. The release needs the repository secrets `GPG_PRIVATE_KEY` and
+`MAVEN_SETTINGS_SERVER_CENTRAL` (a `<server>` element with id `central`).
+
 ## Git
 
 - Commit only when explicitly asked. Never commit to `main` directly; check the branch first.
