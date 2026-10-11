@@ -6,3 +6,4 @@ target/
 .settings/
 .factorypath
 jdk28/source-rewrite-tests/src/test/java/
+site/
