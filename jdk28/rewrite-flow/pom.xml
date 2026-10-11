@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.marvinformatics.structured</groupId>
+    <artifactId>jdk28</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>rewrite-flow</artifactId>
+  <name>JDK 28 Source Rewrite Flow</name>
+  <description>Rewrites the backport test sources to java.util.concurrent with OpenRewrite, then compiles and runs them on the JDK</description>
+
+  <properties>
+    <rewrite.skip>false</rewrite.skip>
+    <rewritten.dir>${project.basedir}/src/test/java</rewritten.dir>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.marvinformatics.structured</groupId>
+      <artifactId>structured-concurrency</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-backport-tests</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <skip>${rewrite.skip}</skip>
+              <outputDirectory>${rewritten.dir}</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${maven.multiModuleProjectDirectory}/structured-concurrency/src/test/java</directory>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-clean-plugin</artifactId>
+        <configuration>
+          <filesets>
+            <fileset>
+              <directory>${rewritten.dir}</directory>
+            </fileset>
+          </filesets>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.openrewrite.maven</groupId>
+        <artifactId>rewrite-maven-plugin</artifactId>
+        <dependencies>
+          <dependency>
+            <groupId>com.marvinformatics.structured</groupId>
+            <artifactId>structured-concurrency-rewrite</artifactId>
+            <version>${project.version}</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <activeRecipes>
+            <recipe>com.marvinformatics.structured.UseJdkStructuredConcurrencyTypes</recipe>
+          </activeRecipes>
+          <exportDatatables>false</exportDatatables>
+        </configuration>
+        <executions>
+          <execution>
+            <id>rewrite-to-jdk</id>
+            <phase>process-test-sources</phase>
+            <goals>
+              <goal>runNoFork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <compilerArgs>
+            <arg>${jdk28.preview-flag}</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <classpathDependencyExcludes>
+            <classpathDependencyExclude>com.marvinformatics.structured:structured-concurrency</classpathDependencyExclude>
+          </classpathDependencyExcludes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

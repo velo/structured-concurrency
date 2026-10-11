@@ -52,6 +52,12 @@
         <module>upstream-conformance</module>
       </modules>
     </profile>
+    <profile>
+      <id>jdk28</id>
+      <modules>
+        <module>jdk28</module>
+      </modules>
+    </profile>
   </profiles>
 
   <properties>
