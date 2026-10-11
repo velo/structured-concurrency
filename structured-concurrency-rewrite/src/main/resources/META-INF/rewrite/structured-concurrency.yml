@@ -1,0 +1,25 @@
+type: specs.openrewrite.org/v1beta/recipe
+name: com.marvinformatics.structured.MigrateToJdkStructuredConcurrency
+displayName: Migrate to JDK structured concurrency
+description: >-
+  Replaces the com.marvinformatics.structured backport with java.util.concurrent.StructuredTaskScope
+  and removes the backport dependency.
+recipeList:
+  - com.marvinformatics.structured.UseJdkStructuredConcurrencyTypes
+  - org.openrewrite.maven.RemoveDependency:
+      groupId: com.marvinformatics.structured
+      artifactId: structured-concurrency
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.marvinformatics.structured.UseJdkStructuredConcurrencyTypes
+displayName: Use JDK structured concurrency types
+description: Changes references to the backport types into their java.util.concurrent equivalents.
+recipeList:
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: com.marvinformatics.structured.StructuredTaskScope
+      newFullyQualifiedTypeName: java.util.concurrent.StructuredTaskScope
+      ignoreDefinition: true
+  - org.openrewrite.java.ChangeType:
+      oldFullyQualifiedTypeName: com.marvinformatics.structured.StructureViolationException
+      newFullyQualifiedTypeName: java.util.concurrent.StructureViolationException
+      ignoreDefinition: true

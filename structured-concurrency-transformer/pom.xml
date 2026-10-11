@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.marvinformatics.structured</groupId>
+    <artifactId>structured-concurrency-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>structured-concurrency-transformer</artifactId>
+  <name>Structured Concurrency Eclipse Transformer Rules</name>
+  <description>Eclipse Transformer rules that retarget compiled code from the backport to java.util.concurrent</description>
+</project>
