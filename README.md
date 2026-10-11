@@ -204,6 +204,10 @@ changes the API or its behavior, the alignment test or the conformance tests fai
 request and show exactly what moved. Once JDK 28 is GA and structured concurrency is no longer
 preview, set `jdk28.preview-flag` to empty.
 
+Dependabot keeps the Maven plugins, dependencies and GitHub Actions current, and Renovate also
+updates the Maven wrapper. Every plugin and dependency version is a property in the parent
+[`pom.xml`](pom.xml), so each update is a one-line change.
+
 ## Project layout
 
 | Module | Purpose |
