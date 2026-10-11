@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^pom\\.xml$/"],
+      "matchStrings": ["<openjdk\\.ref>(?<currentValue>[^<]+)</openjdk\\.ref>"],
+      "datasourceTemplate": "github-tags",
+      "depNameTemplate": "openjdk/jdk",
+      "versioningTemplate": "regex:^jdk-(?<major>\\d+)\\+(?<patch>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^pom\\.xml$/", "/^scripts/verify-jdk28\\.sh$/"],
+      "matchStrings": [
+        "<jdk28\\.image>(?<depName>openjdk):(?<currentValue>[^<]+)</jdk28\\.image>",
+        "JDK28_IMAGE:-(?<depName>openjdk):(?<currentValue>[^}]+)}"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "regex:^(?<major>\\d+)-ea-(?<patch>\\d+)-jdk$"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchDepNames": ["openjdk/jdk", "openjdk"],
+      "groupName": "OpenJDK early-access build"
+    }
+  ]
+}
