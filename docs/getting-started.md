@@ -7,24 +7,20 @@
 
 ## Adding the dependency
 
-!!! note "Not on Maven Central yet"
-    Version 0.1.0 has not been released. Until it is, install the snapshot from source with
-    `./mvnw install` and depend on `0.1.0-SNAPSHOT`.
-
 === "Maven"
 
     ```xml
     <dependency>
       <groupId>com.marvinformatics.structured</groupId>
       <artifactId>structured-concurrency</artifactId>
-      <version>0.1.0-SNAPSHOT</version>
+      <version>0.1.0</version>
     </dependency>
     ```
 
 === "Gradle"
 
     ```kotlin
-    implementation("com.marvinformatics.structured:structured-concurrency:0.1.0-SNAPSHOT")
+    implementation("com.marvinformatics.structured:structured-concurrency:0.1.0")
     ```
 
 The jar declares the automatic module name `com.marvinformatics.structured`.
