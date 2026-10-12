@@ -143,7 +143,7 @@
     <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
     <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
     <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
-    <versions-maven-plugin.version>2.19.1</versions-maven-plugin.version>
+    <versions-maven-plugin.version>2.22.0</versions-maven-plugin.version>
     <gpg.keyname>D82FF933653EB8EC483709C77E738F7E2A355AAE</gpg.keyname>
     <rewrite-maven-plugin.version>6.46.1</rewrite-maven-plugin.version>
     <transformer-maven-plugin.version>1.0.0</transformer-maven-plugin.version>
