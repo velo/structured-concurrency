@@ -99,6 +99,25 @@ class ScopeLifecycleTest {
   }
 
   @Test
+  void timeoutStartsAtOpenSoForkAfterItExpiresNeverRuns() throws Exception {
+    var subtaskRan = new AtomicBoolean();
+    try (var scope = StructuredTaskScope.open(cf -> cf.withTimeout(Duration.ofMillis(10)))) {
+      Thread.sleep(Duration.ofMillis(100));
+      Subtask<String> subtask = scope.fork(() -> {
+        subtaskRan.set(true);
+        return "too late";
+      });
+
+      assertThatThrownBy(scope::join)
+          .isInstanceOf(ExecutionException.class)
+          .cause()
+          .isInstanceOf(CancelledByTimeoutException.class);
+      assertThat(subtask.state()).isEqualTo(Subtask.State.UNAVAILABLE);
+    }
+    assertThat(subtaskRan).isFalse();
+  }
+
+  @Test
   void closeWithoutJoinThrowsAndStillWaitsForInterruptedSubtask() {
     var subtaskCompletedCleanupAfterInterrupt = new AtomicBoolean();
     try (var scope = StructuredTaskScope.open()) {

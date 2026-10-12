@@ -50,6 +50,17 @@ class UseCaseExamplesTest {
     return valueToReturn;
   }
 
+  static String sleepUntilInterruptedThenCountDown(CountDownLatch interruptedSubtasks)
+      throws InterruptedException {
+    try {
+      Thread.sleep(Duration.ofDays(1));
+      return "never";
+    } catch (InterruptedException e) {
+      interruptedSubtasks.countDown();
+      throw e;
+    }
+  }
+
   @Test
   void fanOutAndCombineHeterogeneousResults() throws Exception {
     Page page;
@@ -102,18 +113,9 @@ class UseCaseExamplesTest {
   @Test
   void raceReplicasAndTakeTheFastest() throws Exception {
     var losersInterrupted = new CountDownLatch(2);
-    Callable<String> slowReplica = () -> {
-      try {
-        return sleepThenReturn("eu", Duration.ofDays(1));
-      } catch (InterruptedException e) {
-        losersInterrupted.countDown();
-        throw e;
-      }
-    };
-
     try (var scope = StructuredTaskScope.open(Joiner.<String>anySuccessfulOrThrow())) {
-      scope.fork(slowReplica);
-      scope.fork(slowReplica);
+      scope.fork(() -> sleepUntilInterruptedThenCountDown(losersInterrupted));
+      scope.fork(() -> sleepUntilInterruptedThenCountDown(losersInterrupted));
       scope.fork(() -> sleepThenReturn("us", Duration.ofMillis(10)));
 
       assertThat(scope.join()).isEqualTo("us");
@@ -314,6 +316,36 @@ class UseCaseExamplesTest {
       assertThat(user.get().id()).isEqualTo("7");
       assertThat(totalOrderAmount.get()).isEqualTo(84);
     }
+  }
+
+  @Test
+  void failureDeepInTheTreeArrivesAsCauseChainAndCancelsEveryBranch() throws Exception {
+    var subtasksAwaitingInterrupt = new CountDownLatch(3);
+    try (var scope = StructuredTaskScope.open()) {
+      Subtask<String> outerSiblingSubtask =
+          scope.fork(() -> sleepUntilInterruptedThenCountDown(subtasksAwaitingInterrupt));
+      scope.fork(() -> {
+        try (var innerScope = StructuredTaskScope.open()) {
+          innerScope.fork(() -> sleepUntilInterruptedThenCountDown(subtasksAwaitingInterrupt));
+          innerScope.fork(() -> sleepUntilInterruptedThenCountDown(subtasksAwaitingInterrupt));
+          innerScope.fork(() -> {
+            throw new IllegalStateException("account locked");
+          });
+          innerScope.join();
+          return "customer";
+        }
+      });
+
+      assertThatThrownBy(scope::join)
+          .isInstanceOf(ExecutionException.class)
+          .cause()
+          .isInstanceOf(ExecutionException.class)
+          .cause()
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessage("account locked");
+      assertThat(outerSiblingSubtask.state()).isEqualTo(Subtask.State.UNAVAILABLE);
+    }
+    assertThat(subtasksAwaitingInterrupt.getCount()).isZero();
   }
 
   static long parallelSum(long[] values, int from, int to) throws Exception {
