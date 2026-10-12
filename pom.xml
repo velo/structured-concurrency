@@ -119,7 +119,7 @@
     <project.build.outputTimestamp>2026-10-12T09:20:49Z</project.build.outputTimestamp>
     <maven.compiler.release>21</maven.compiler.release>
 
-    <openjdk.ref>jdk-28+18</openjdk.ref>
+    <openjdk.ref>jdk-28+19</openjdk.ref>
     <jdk28.image>openjdk:28-ea-18-jdk</jdk28.image>
     <jdk28.release>28</jdk28.release>
     <jdk28.preview-flag>--enable-preview</jdk28.preview-flag>
