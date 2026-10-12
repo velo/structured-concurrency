@@ -43,7 +43,8 @@ rules exist.
 ## Updating to a newer OpenJDK build
 
 1. Bump `openjdk.ref` and `jdk28.image` in `pom.xml`; the script reads the image from there.
-   Renovate normally does this.
+   Renovate normally does this, but only for `jdk-28+N` tags and `28-ea-N-jdk` images. The move to
+   the GA tag and a GA image, and any move to JDK 29, are manual.
 2. Run `./mvnw verify` and `scripts/verify-jdk28.sh`.
 3. If the alignment test fails, change the public API to match and implement the new behavior from
    the javadoc. The alignment test finds the types to compare by itself: every public type in
