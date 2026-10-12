@@ -56,7 +56,7 @@ and `R_X` is the exception `join()` throws. The four methods are:
 the subtask's result or exception, even before the owner joins. Subtasks finish concurrently, so
 use thread-safe state, and make a new joiner for every scope.
 
-Keep a joiner about subtasks: when the work is done and what `join()` returns. Business decisions,
+A joiner should only decide when the work is done and what `join()` returns. Business decisions,
 such as which result is valid or what to do with it, belong in the code after `join()`.
 
 A joiner that returns as soon as a quorum of subtasks has succeeded:

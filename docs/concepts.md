@@ -50,9 +50,14 @@ try (var scope = StructuredTaskScope.open()) {
   scope.join();
   return new OrderSummary(customer.get(), order.get());
 } catch (ExecutionException e) {
-  throw new OrderUnavailable(e.getCause());
+  log.warn("order summary unavailable, serving the cached one", e.getCause());
+  return cachedSummaries.get(id);
 }
 ```
+
+To only turn the failure into your own exception, pass an exception function to the joiner instead,
+as in [Choosing the exception](joiners.md#choosing-the-exception). The tested version of a fallback
+is the [deadline pattern](patterns.md#deadline-with-a-fallback).
 
 If a failure is a normal outcome, such as "not found", consider returning it as a value from the
 subtask rather than throwing it.
@@ -84,8 +89,8 @@ finishes. `join()` then returns what the joiner's `timeout()` method produces:
   `ExecutionException` caused by `CancelledByTimeoutException`;
 - `allUntil` returns the subtasks as they are, so you can keep whatever finished in time.
 
-The clock starts when `open` returns, not at the first fork, so it bounds the whole block up to
-`join()`. A zero or negative timeout expires at once.
+The clock starts when the scope is opened, not at the first fork. This means the time limit covers
+the whole block up to `join()`. If the timeout is zero or negative, it expires immediately.
 
 ## Configuration
 
@@ -110,11 +115,13 @@ A subtask can open its own scope, and the scopes form a tree. Each scope must be
 scope that encloses it. If the owner closes an outer scope while an inner one it opened is still
 open, the inner scope is closed first and `close()` throws `StructureViolationException`.
 
-A failure deep in the tree travels up as a chain of causes. When a subtask of an inner scope fails,
-the inner `join()` throws, which fails the outer subtask that opened it, and the outer `join()`
-throws in turn. Each level cancels its own siblings on the way. The outer `ExecutionException`'s
-cause is the inner `ExecutionException`, whose cause is the original failure, so the stack trace
-shows the path from the owner down to the subtask that failed.
+A failure deep in the tree moves up through a chain of causes. If a subtask of an inner scope fails,
+the inner `join()` throws. This causes the outer subtask that opened it to fail, and the outer
+`join()` throws too. As the failure moves up, each level cancels its own siblings. The outer
+`ExecutionException`'s cause is the inner `ExecutionException`, whose cause is the original failure.
+Because of this, the stack trace shows the path from the owner down to the subtask that failed.
+[`UseCaseExamplesTest.failureDeepInTheTreeArrivesAsCauseChainAndCancelsEveryBranch`](https://github.com/velo/structured-concurrency/blob/main/structured-concurrency/src/test/java/com/marvinformatics/structured/spec/UseCaseExamplesTest.java)
+tests this.
 
 ## Differences from the JDK
 

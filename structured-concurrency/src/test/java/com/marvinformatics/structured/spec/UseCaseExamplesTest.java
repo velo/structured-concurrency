@@ -2,7 +2,6 @@ package com.marvinformatics.structured.spec;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.entry;
 
 import com.marvinformatics.structured.StructuredTaskScope;
@@ -49,6 +48,17 @@ class UseCaseExamplesTest {
   static String sleepThenReturn(String valueToReturn, Duration delay) throws InterruptedException {
     Thread.sleep(delay);
     return valueToReturn;
+  }
+
+  static String sleepUntilInterruptedThenCountDown(CountDownLatch interruptedSubtasks)
+      throws InterruptedException {
+    try {
+      Thread.sleep(Duration.ofDays(1));
+      return "never";
+    } catch (InterruptedException e) {
+      interruptedSubtasks.countDown();
+      throw e;
+    }
   }
 
   @Test
@@ -103,18 +113,9 @@ class UseCaseExamplesTest {
   @Test
   void raceReplicasAndTakeTheFastest() throws Exception {
     var losersInterrupted = new CountDownLatch(2);
-    Callable<String> slowReplica = () -> {
-      try {
-        return sleepThenReturn("eu", Duration.ofDays(1));
-      } catch (InterruptedException e) {
-        losersInterrupted.countDown();
-        throw e;
-      }
-    };
-
     try (var scope = StructuredTaskScope.open(Joiner.<String>anySuccessfulOrThrow())) {
-      scope.fork(slowReplica);
-      scope.fork(slowReplica);
+      scope.fork(() -> sleepUntilInterruptedThenCountDown(losersInterrupted));
+      scope.fork(() -> sleepUntilInterruptedThenCountDown(losersInterrupted));
       scope.fork(() -> sleepThenReturn("us", Duration.ofMillis(10)));
 
       assertThat(scope.join()).isEqualTo("us");
@@ -317,47 +318,34 @@ class UseCaseExamplesTest {
     }
   }
 
-  static String sleepUntilInterrupted(CountDownLatch interrupted) throws InterruptedException {
-    try {
-      Thread.sleep(Duration.ofDays(1));
-      return "never";
-    } catch (InterruptedException e) {
-      interrupted.countDown();
-      throw e;
-    }
-  }
-
   @Test
   void failureDeepInTheTreeArrivesAsCauseChainAndCancelsEveryBranch() throws Exception {
-    var cancelledSubtasks = new CountDownLatch(3);
-    Subtask<String> order;
-    Throwable failure;
+    var subtasksAwaitingInterrupt = new CountDownLatch(3);
     try (var scope = StructuredTaskScope.open()) {
+      Subtask<String> outerSiblingSubtask =
+          scope.fork(() -> sleepUntilInterruptedThenCountDown(subtasksAwaitingInterrupt));
       scope.fork(() -> {
-        try (var customer = StructuredTaskScope.open()) {
-          customer.fork(() -> sleepUntilInterrupted(cancelledSubtasks));
-          customer.fork(() -> sleepUntilInterrupted(cancelledSubtasks));
-          customer.fork(() -> {
+        try (var innerScope = StructuredTaskScope.open()) {
+          innerScope.fork(() -> sleepUntilInterruptedThenCountDown(subtasksAwaitingInterrupt));
+          innerScope.fork(() -> sleepUntilInterruptedThenCountDown(subtasksAwaitingInterrupt));
+          innerScope.fork(() -> {
             throw new IllegalStateException("account locked");
           });
-          customer.join();
+          innerScope.join();
           return "customer";
         }
       });
-      order = scope.fork(() -> sleepUntilInterrupted(cancelledSubtasks));
 
-      failure = catchThrowable(scope::join);
+      assertThatThrownBy(scope::join)
+          .isInstanceOf(ExecutionException.class)
+          .cause()
+          .isInstanceOf(ExecutionException.class)
+          .cause()
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessage("account locked");
+      assertThat(outerSiblingSubtask.state()).isEqualTo(Subtask.State.UNAVAILABLE);
     }
-
-    assertThat(failure)
-        .isInstanceOf(ExecutionException.class)
-        .cause()
-        .isInstanceOf(ExecutionException.class)
-        .cause()
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("account locked");
-    assertThat(order.state()).isEqualTo(Subtask.State.UNAVAILABLE);
-    assertThat(cancelledSubtasks.getCount()).isZero();
+    assertThat(subtasksAwaitingInterrupt.getCount()).isZero();
   }
 
   static long parallelSum(long[] values, int from, int to) throws Exception {

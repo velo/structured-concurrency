@@ -99,10 +99,10 @@ class ScopeLifecycleTest {
   }
 
   @Test
-  void timeoutCountsFromOpenNotFromFirstFork() throws Exception {
+  void timeoutStartsAtOpenSoForkAfterItExpiresNeverRuns() throws Exception {
     var subtaskRan = new AtomicBoolean();
-    try (var scope = StructuredTaskScope.open(cf -> cf.withTimeout(Duration.ofMillis(100)))) {
-      Thread.sleep(Duration.ofMillis(300));
+    try (var scope = StructuredTaskScope.open(cf -> cf.withTimeout(Duration.ofMillis(10)))) {
+      Thread.sleep(Duration.ofMillis(100));
       Subtask<String> subtask = scope.fork(() -> {
         subtaskRan.set(true);
         return "too late";
