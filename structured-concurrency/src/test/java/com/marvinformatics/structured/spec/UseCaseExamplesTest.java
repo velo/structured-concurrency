@@ -2,6 +2,7 @@ package com.marvinformatics.structured.spec;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.entry;
 
 import com.marvinformatics.structured.StructuredTaskScope;
@@ -314,6 +315,49 @@ class UseCaseExamplesTest {
       assertThat(user.get().id()).isEqualTo("7");
       assertThat(totalOrderAmount.get()).isEqualTo(84);
     }
+  }
+
+  static String sleepUntilInterrupted(CountDownLatch interrupted) throws InterruptedException {
+    try {
+      Thread.sleep(Duration.ofDays(1));
+      return "never";
+    } catch (InterruptedException e) {
+      interrupted.countDown();
+      throw e;
+    }
+  }
+
+  @Test
+  void failureDeepInTheTreeArrivesAsCauseChainAndCancelsEveryBranch() throws Exception {
+    var cancelledSubtasks = new CountDownLatch(3);
+    Subtask<String> order;
+    Throwable failure;
+    try (var scope = StructuredTaskScope.open()) {
+      scope.fork(() -> {
+        try (var customer = StructuredTaskScope.open()) {
+          customer.fork(() -> sleepUntilInterrupted(cancelledSubtasks));
+          customer.fork(() -> sleepUntilInterrupted(cancelledSubtasks));
+          customer.fork(() -> {
+            throw new IllegalStateException("account locked");
+          });
+          customer.join();
+          return "customer";
+        }
+      });
+      order = scope.fork(() -> sleepUntilInterrupted(cancelledSubtasks));
+
+      failure = catchThrowable(scope::join);
+    }
+
+    assertThat(failure)
+        .isInstanceOf(ExecutionException.class)
+        .cause()
+        .isInstanceOf(ExecutionException.class)
+        .cause()
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("account locked");
+    assertThat(order.state()).isEqualTo(Subtask.State.UNAVAILABLE);
+    assertThat(cancelledSubtasks.getCount()).isZero();
   }
 
   static long parallelSum(long[] values, int from, int to) throws Exception {
