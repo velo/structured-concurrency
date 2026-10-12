@@ -21,6 +21,11 @@
   ],
   "packageRules": [
     {
+      "matchManagers": ["maven-wrapper"],
+      "matchDepNames": ["maven"],
+      "allowedVersions": "<3.10.0"
+    },
+    {
       "matchDepNames": ["openjdk/jdk", "openjdk"],
       "groupName": "OpenJDK early-access build"
     }

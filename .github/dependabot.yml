@@ -10,6 +10,9 @@ updates:
       maven-dependencies:
         patterns: ["*"]
         exclude-patterns: ["*-plugin"]
+    ignore:
+      - dependency-name: org.apache.maven:apache-maven
+        versions: [">=3.10.0"]
   - package-ecosystem: pip
     directory: /docs
     schedule:
