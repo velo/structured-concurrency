@@ -7,9 +7,11 @@ set -euo pipefail
 script_path="$(readlink -f "${BASH_SOURCE[0]}")"
 PROJECT_ROOT="${script_path%/*/*}"
 readonly PROJECT_ROOT
-pom_jdk28_image="$(sed -n 's:.*<jdk28.image>\(.*\)</jdk28.image>.*:\1:p' "${PROJECT_ROOT}/pom.xml")"
+dockerfile_jdk28_image="$(sed -n 's/^FROM //p' "${PROJECT_ROOT}/jdk28/Dockerfile")"
+pom_openjdk_ref="$(sed -n 's:.*<openjdk.ref>\(.*\)</openjdk.ref>.*:\1:p' "${PROJECT_ROOT}/pom.xml")"
+readonly POM_OPENJDK_REF="${pom_openjdk_ref}"
 readonly JDK25_IMAGE="${JDK25_IMAGE:-eclipse-temurin:25-jdk}"
-readonly JDK28_IMAGE="${JDK28_IMAGE:-${pom_jdk28_image}}"
+readonly JDK28_IMAGE="${JDK28_IMAGE:-${dockerfile_jdk28_image}}"
 readonly MAVEN_REPO="${MAVEN_REPO:-${HOME}/.m2}"
 readonly MODULES_EXCLUDED_ON_JDK28='!structured-concurrency-rewrite'
 
@@ -28,7 +30,7 @@ Options:
 
 Environment:
   JDK25_IMAGE  image for the JDK 25 stages (default: ${JDK25_IMAGE})
-  JDK28_IMAGE  image for the JDK 28 stage (default: jdk28.image in pom.xml)
+  JDK28_IMAGE  image for the JDK 28 stage (default: FROM in jdk28/Dockerfile)
   MAVEN_REPO   Maven home mounted into containers (default: ${MAVEN_REPO})
 
 Examples:
@@ -61,6 +63,17 @@ run_mvnw_in_container() {
     ./mvnw -B "$@"
 }
 
+require_image_matches_openjdk_ref() {
+  local java_version
+  java_version="$(docker run --rm "${JDK28_IMAGE}" sh -c 'echo "${JAVA_VERSION}"')"
+  local image_openjdk_ref="jdk-${java_version/-ea/}"
+  if [[ "${image_openjdk_ref}" != "${POM_OPENJDK_REF}" ]]; then
+    echo "$(basename "$0"): ${JDK28_IMAGE} is ${image_openjdk_ref}," \
+      "but openjdk.ref in pom.xml is ${POM_OPENJDK_REF}" >&2
+    exit 1
+  fi
+}
+
 main() {
   local skip_install='false'
   local -a maven_args=()
@@ -86,6 +99,8 @@ main() {
     echo "$(basename "$0"): docker is required but was not found on PATH" >&2
     exit 1
   fi
+
+  require_image_matches_openjdk_ref
 
   # Created up front so Docker does not create it owned by root.
   mkdir -p "${MAVEN_REPO}"

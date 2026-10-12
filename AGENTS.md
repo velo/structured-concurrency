@@ -42,8 +42,8 @@ rules exist.
 
 ## Updating to a newer OpenJDK build
 
-1. Bump `openjdk.ref` and `jdk28.image` in `pom.xml`; the script reads the image from there.
-   Renovate normally does this.
+1. Dependabot bumps the image in `jdk28/Dockerfile`. Set `openjdk.ref` in `pom.xml` to the same
+   build in that pull request; the script fails while they differ.
 2. Run `./mvnw verify` and `scripts/verify-jdk28.sh`.
 3. If the alignment test fails, change the public API to match and implement the new behavior from
    the javadoc. The alignment test finds the types to compare by itself: every public type in
@@ -83,7 +83,7 @@ rules exist.
 
 Keep the Maven wrapper on 3.9.x. Under Maven 3.10 the plugin's staging bundle gains
 `maven-metadata-local.xml` and `_remote.repositories` files, and Central rejects it ("Bundle has
-content that does NOT have a .pom file"). Dependabot and Renovate are told to skip 3.10.
+content that does NOT have a .pom file"). Dependabot is told to skip 3.10.
 
 Nothing deploys a SNAPSHOT. The release needs the repository secrets `GPG_PRIVATE_KEY` and
 `MAVEN_SETTINGS_SERVER_CENTRAL` (a `<server>` element with id `central`).

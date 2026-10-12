@@ -202,18 +202,19 @@ JDK 25, then compiles and tests on JDK 28. That also matches how a real migratio
 
 ## Following the JDK
 
-Two properties in [`pom.xml`](pom.xml) pin the upstream reference:
+Two places pin the upstream reference:
 
-- `openjdk.ref`, the `openjdk/jdk` tag the conformance tests come from;
-- `jdk28.image`, the JDK 28 Docker image used for verification.
+- `openjdk.ref` in [`pom.xml`](pom.xml), the `openjdk/jdk` tag the conformance tests come from;
+- [`jdk28/Dockerfile`](jdk28/Dockerfile), the JDK 28 Docker image used for verification, by tag
+  and digest.
 
-Renovate opens a pull request whenever OpenJDK publishes a new build tag or image. If the JDK
+Dependabot opens a pull request when a new image is published, and `openjdk.ref` is bumped to the
+same build in that pull request. If the JDK
 changes the API or its behavior, the alignment test or the conformance tests fail in that pull
 request and show exactly what moved. Once JDK 28 is GA and structured concurrency is no longer
 preview, set `jdk28.preview-flag` to empty.
 
-Dependabot keeps the Maven plugins, dependencies and GitHub Actions current, and Renovate also
-updates the Maven wrapper. Every plugin and dependency version is a property in the parent
+Dependabot also keeps the Maven plugins, dependencies, Maven wrapper and GitHub Actions current. Every plugin and dependency version is a property in the parent
 [`pom.xml`](pom.xml), so each update is a one-line change.
 
 ## Project layout
