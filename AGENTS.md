@@ -81,6 +81,10 @@ rules exist.
 5. Only modules that declare `central-publishing-maven-plugin` in their own `release` profile are
    published. Don't add it to modules that attach no artifact, such as `upstream-conformance`.
 
+Keep the Maven wrapper on 3.9.x. Under Maven 3.10 the plugin's staging bundle gains
+`maven-metadata-local.xml` and `_remote.repositories` files, and Central rejects it ("Bundle has
+content that does NOT have a .pom file"). Dependabot and Renovate are told to skip 3.10.
+
 Nothing deploys a SNAPSHOT. The release needs the repository secrets `GPG_PRIVATE_KEY` and
 `MAVEN_SETTINGS_SERVER_CENTRAL` (a `<server>` element with id `central`).
 
