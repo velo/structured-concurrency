@@ -208,14 +208,16 @@ Two places pin the upstream reference:
 - [`jdk28/Dockerfile`](jdk28/Dockerfile), the JDK 28 Docker image used for verification, by tag
   and digest.
 
-Dependabot opens a pull request when a new image is published, and `openjdk.ref` is bumped to the
-same build in that pull request. If the JDK
-changes the API or its behavior, the alignment test or the conformance tests fail in that pull
-request and show exactly what moved. Once JDK 28 is GA and structured concurrency is no longer
-preview, set `jdk28.preview-flag` to empty.
+Dependabot opens a pull request when a new image is released. In that pull request, `openjdk.ref`
+is updated to the same build. If the JDK changes its API or how it works, the alignment test or the
+conformance tests fail in that pull request and show exactly what changed. Once JDK 28 is GA and
+structured concurrency is no longer a preview feature, set `jdk28.preview-flag` to empty and move
+the `FROM` in `jdk28/Dockerfile` to a GA image, such as `eclipse-temurin:28-jdk`, by hand. The
+`openjdk` image only publishes early-access builds.
 
-Dependabot also keeps the Maven plugins, dependencies, Maven wrapper and GitHub Actions current. Every plugin and dependency version is a property in the parent
-[`pom.xml`](pom.xml), so each update is a one-line change.
+Dependabot also keeps the Maven plugins, dependencies, Maven wrapper and GitHub Actions current.
+Every plugin and dependency version is a property in the parent [`pom.xml`](pom.xml), so each
+update is a one-line change.
 
 ## Project layout
 

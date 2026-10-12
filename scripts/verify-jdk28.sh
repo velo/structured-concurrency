@@ -8,8 +8,8 @@ script_path="$(readlink -f "${BASH_SOURCE[0]}")"
 PROJECT_ROOT="${script_path%/*/*}"
 readonly PROJECT_ROOT
 dockerfile_jdk28_image="$(sed -n 's/^FROM //p' "${PROJECT_ROOT}/jdk28/Dockerfile")"
-pom_openjdk_ref="$(sed -n 's:.*<openjdk.ref>\(.*\)</openjdk.ref>.*:\1:p' "${PROJECT_ROOT}/pom.xml")"
-readonly POM_OPENJDK_REF="${pom_openjdk_ref}"
+POM_OPENJDK_REF="$(sed -n 's:.*<openjdk.ref>\(.*\)</openjdk.ref>.*:\1:p' "${PROJECT_ROOT}/pom.xml")"
+readonly POM_OPENJDK_REF
 readonly JDK25_IMAGE="${JDK25_IMAGE:-eclipse-temurin:25-jdk}"
 readonly JDK28_IMAGE="${JDK28_IMAGE:-${dockerfile_jdk28_image}}"
 readonly MAVEN_REPO="${MAVEN_REPO:-${HOME}/.m2}"
@@ -30,7 +30,8 @@ Options:
 
 Environment:
   JDK25_IMAGE  image for the JDK 25 stages (default: ${JDK25_IMAGE})
-  JDK28_IMAGE  image for the JDK 28 stage (default: FROM in jdk28/Dockerfile)
+  JDK28_IMAGE  image for the JDK 28 stage (default: FROM in jdk28/Dockerfile);
+               its JAVA_VERSION must match openjdk.ref in pom.xml
   MAVEN_REPO   Maven home mounted into containers (default: ${MAVEN_REPO})
 
 Examples:
@@ -63,9 +64,14 @@ run_mvnw_in_container() {
     ./mvnw -B "$@"
 }
 
-require_image_matches_openjdk_ref() {
+require_jdk28_image_matches_pom_openjdk_ref() {
+  if [[ -z "${JDK28_IMAGE}" ]]; then
+    echo "$(basename "$0"): no FROM line in jdk28/Dockerfile" >&2
+    exit 1
+  fi
   local java_version
-  java_version="$(docker run --rm "${JDK28_IMAGE}" sh -c 'echo "${JAVA_VERSION}"')"
+  java_version="$(docker run --rm --entrypoint printenv "${JDK28_IMAGE}" JAVA_VERSION)"
+  java_version="${java_version#jdk-}"
   local image_openjdk_ref="jdk-${java_version/-ea/}"
   if [[ "${image_openjdk_ref}" != "${POM_OPENJDK_REF}" ]]; then
     echo "$(basename "$0"): ${JDK28_IMAGE} is ${image_openjdk_ref}," \
@@ -100,7 +106,7 @@ main() {
     exit 1
   fi
 
-  require_image_matches_openjdk_ref
+  require_jdk28_image_matches_pom_openjdk_ref
 
   # Created up front so Docker does not create it owned by root.
   mkdir -p "${MAVEN_REPO}"
