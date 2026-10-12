@@ -36,5 +36,4 @@ jobs:
 
       - name: Explain why a workflow update was left open
         if: steps.metadata.outputs.package-ecosystem == 'github_actions'
-        run: |
-          echo "Approved, not queued: merging a workflow change needs a human." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Approved, not queued; merging a workflow change needs a human." >> "$GITHUB_STEP_SUMMARY"
