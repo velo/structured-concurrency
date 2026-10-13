@@ -120,7 +120,6 @@
     <maven.compiler.release>21</maven.compiler.release>
 
     <openjdk.ref>jdk-28+18</openjdk.ref>
-    <jdk28.image>openjdk:28-ea-18-jdk</jdk28.image>
     <jdk28.release>28</jdk28.release>
     <jdk28.preview-flag>--enable-preview</jdk28.preview-flag>
 

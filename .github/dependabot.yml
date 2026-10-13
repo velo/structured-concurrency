@@ -13,6 +13,10 @@ updates:
     ignore:
       - dependency-name: org.apache.maven:apache-maven
         versions: [">=3.10.0"]
+  - package-ecosystem: docker
+    directory: /jdk28
+    schedule:
+      interval: daily
   - package-ecosystem: pip
     directory: /docs
     schedule:

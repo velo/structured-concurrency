@@ -42,15 +42,19 @@ rules exist.
 
 ## Updating to a newer OpenJDK build
 
-1. Bump `openjdk.ref` and `jdk28.image` in `pom.xml`; the script reads the image from there.
-   Renovate normally does this.
+1. Dependabot updates the image in `jdk28/Dockerfile`. Nothing updates `openjdk.ref`
+   automatically: set it in `pom.xml` to match the build in that pull request. The script fails if
+   they are different.
 2. Run `./mvnw verify` and `scripts/verify-jdk28.sh`.
 3. If the alignment test fails, change the public API to match and implement the new behavior from
    the javadoc. The alignment test finds the types to compare by itself: every public type in
    `java.util.concurrent` whose name starts with `Structure`, and all their public nested types. If
-   a new type appears there, it fails until the backport has it. If a conformance test fails, fix the implementation. Only exclude an upstream test
-   when it depends on JDK internals the library cannot reach, and list it under "Known
-   differences" in the README.
+   a new type appears there, it fails until the backport has it. If a conformance test fails, fix
+   the implementation. Only exclude an upstream test when it depends on JDK internals the library
+   cannot reach, and list it under "Known differences" in the README.
+4. After JDK 28 GA, move the `FROM` in `jdk28/Dockerfile` to a GA image by hand and clear
+   `jdk28.preview-flag`. Check that the GA image still sets `JAVA_VERSION` in the form the script
+   reads.
 
 ## Code style
 
@@ -81,9 +85,9 @@ rules exist.
 5. Only modules that declare `central-publishing-maven-plugin` in their own `release` profile are
    published. Don't add it to modules that attach no artifact, such as `upstream-conformance`.
 
-Keep the Maven wrapper on 3.9.x. Under Maven 3.10 the plugin's staging bundle gains
-`maven-metadata-local.xml` and `_remote.repositories` files, and Central rejects it ("Bundle has
-content that does NOT have a .pom file"). Dependabot and Renovate are told to skip 3.10.
+Keep the Maven wrapper on version 3.9.x. With Maven 3.10, the plugin's staging bundle includes
+extra files: `maven-metadata-local.xml` and `_remote.repositories`. Maven Central rejects the bundle
+("Bundle has content that does NOT have a .pom file"). Dependabot is told to skip version 3.10.
 
 Nothing deploys a SNAPSHOT. The release needs the repository secrets `GPG_PRIVATE_KEY` and
 `MAVEN_SETTINGS_SERVER_CENTRAL` (a `<server>` element with id `central`).
