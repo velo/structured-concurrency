@@ -1,1 +1,1 @@
-FROM openjdk:28-ea-jdk@sha256:c16b755b0734dee987b340594bf8c3f5117fbebcef6b2f774214ecc961b0344c
+FROM openjdk:28-ea-jdk@sha256:5d242e86f383cd15af1323e72eb9ef80ef0c0c87316d7185c61bf0a67242fa83
